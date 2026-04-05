@@ -28,6 +28,13 @@ from .objects import (
     Workflow,
 )
 
+from .state_machine import (
+    InvalidTransitionError,
+    StageNotFoundError,
+    StateMachine,
+    TransitionRecord,
+)
+
 __all__ = [
     # Objects
     "Project",
@@ -49,4 +56,9 @@ __all__ = [
     "check_authority",
     "AuthorityViolation",
     "AuthorizationRecord",
+    # State Machine
+    "StateMachine",
+    "InvalidTransitionError",
+    "StageNotFoundError",
+    "TransitionRecord",
 ]
