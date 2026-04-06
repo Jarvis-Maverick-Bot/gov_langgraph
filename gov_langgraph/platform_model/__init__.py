@@ -10,6 +10,7 @@ Public API:
                 HandoffStatus, GateDecision
     Authority:  check_authority(), AuthorizationRecord
     State:      StateMachine, TransitionRecord
+    Handoff:    HandoffDocument (minimum V1 handoff schema)
     Exceptions: PlatformException, AuthorityViolation, InvalidTransitionError,
                 StageNotFoundError, ObjectNotFoundError, ValidationError
 """
@@ -70,6 +71,13 @@ from .workflows import (
     get_v1_pipeline_workflow,
 )
 
+# ---------------------------------------------------------------------------
+# Handoff Schema (V1 minimum handoff document)
+# ---------------------------------------------------------------------------
+from .handoff_schema import (
+    HandoffDocument,
+)
+
 __all__ = [
     # Exceptions
     "PlatformException",
@@ -103,4 +111,6 @@ __all__ = [
     # Workflows
     "V1_PIPELINE_STAGES",
     "get_v1_pipeline_workflow",
+    # Handoff
+    "HandoffDocument",
 ]
