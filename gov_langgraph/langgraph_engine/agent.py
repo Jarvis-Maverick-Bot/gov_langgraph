@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
 
-from gov_langgraph.platform_model import Role
+from gov_langgraph.platform_model import Role, V1_PIPELINE_STAGES
 from gov_langgraph.platform_model.handoff_schema import HandoffDocument
 
 
@@ -65,6 +65,7 @@ class RoleShapedAgent:
     current_task_id: Optional[str] = None
     current_project_id: Optional[str] = None
     current_stage: Optional[str] = None
+    halt_reason: Optional[str] = None
 
     def can_act_in_stage(self, stage: str) -> bool:
         """Check if this agent is allowed to operate in the given stage."""
@@ -133,8 +134,9 @@ class RoleShapedAgent:
         return handoff
 
     def halt(self, reason: str):
-        """Halt this agent mid-execution."""
+        """Halt this agent mid-execution. Stores reason for audit."""
         self.status = AgentStatus.HALTED
+        self.halt_reason = reason
 
     def to_dict(self) -> dict:
         return {
@@ -150,15 +152,11 @@ class RoleShapedAgent:
         }
 
 
-# Stage sequence for next_stage calculation
-_STAGE_SEQUENCE = ["BA", "SA", "DEV", "QA"]
-
-
 def _next_stage(current: str) -> str:
-    """Get the next stage after current."""
+    """Get the next stage after current. Derived from V1_PIPELINE_STAGES."""
     try:
-        idx = _STAGE_SEQUENCE.index(current)
-        return _STAGE_SEQUENCE[idx + 1] if idx + 1 < len(_STAGE_SEQUENCE) else "END"
+        idx = V1_PIPELINE_STAGES.index(current)
+        return V1_PIPELINE_STAGES[idx + 1] if idx + 1 < len(V1_PIPELINE_STAGES) else "END"
     except ValueError:
         return "END"
 

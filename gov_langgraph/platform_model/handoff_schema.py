@@ -79,7 +79,7 @@ class HandoffDocument:
         )
 
     def is_complete(self) -> bool:
-        """True if all required fields are non-empty."""
+        """True if all required fields are non-empty including artifact_references."""
         return bool(
             self.task_id
             and self.project_id
@@ -90,4 +90,5 @@ class HandoffDocument:
             and self.next_expected_action
             and self.timestamp
             and self.status
+            and self.artifact_references  # must have at least one artifact
         )
