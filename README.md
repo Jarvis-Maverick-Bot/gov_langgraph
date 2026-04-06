@@ -1,7 +1,7 @@
 # gov_langgraph — V1 Implementation
 
-**Version:** V1 Phase 1 + Phase 2 (Week 1–2)
-**Status:** Harness layer complete. Ready for Week 3 (LangGraph Engine).
+**Version:** V1 Phase 1–3 (Week 1–3)
+**Status:** Week 3 complete — LangGraph engine operational.
 
 ---
 
@@ -26,6 +26,10 @@ cd D:\Projects\gov_langgraph
 ### Run the E2E test
 
 ```bash
+# LangGraph E2E test (full pipeline)
+python LANGGRAPH_E2E_TEST.py
+
+# Platform model test (state machine unit tests)
 python E2E_TEST.py
 ```
 
@@ -84,6 +88,17 @@ gov_langgraph/
 │   ├── state_machine.py    # Stage transition validation
 │   ├── exceptions.py       # Exception hierarchy
 │   └── workflows.py        # V1 Pipeline definition (single source of truth)
+│
+├── langgraph_engine/        # Week 3: LangGraph StateGraph
+│   ├── state.py            # GovernanceState dataclass
+│   ├── graph.py           # build_graph() — START->maverick->stage nodes->END
+│   ├── pipeline.py        # compile() + run_workitem()
+│   ├── runtime.py         # RuntimeContext singleton
+│   ├── edges.py           # Edge routing rules (documented)
+│   └── nodes/             # Stage nodes + maverick
+│       ├── base.py        # BaseNode
+│       ├── maverick.py   # Maverick node
+│       └── viper_ba.py   # Viper BA/SA/DEV/QA nodes
 │
 ├── harness/                # Layer 2 + Layer 3: Persistence
 │   ├── config.py          # HarnessConfig — paths and settings
