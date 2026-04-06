@@ -123,17 +123,17 @@ class EvidenceStore:
     def append(self, record: EvidenceRecord) -> None:
         """
         Append an evidence record to the appropriate .jsonl file.
+
+        JSONL format: one JSON object per line, no indent.
         """
         if record.task_id:
             path = self._file_path(record.task_id, by="task")
-            path.open("a", encoding="utf-8").write(
-                json.dumps(record.to_dict(), indent=2) + "\n"
-            )
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record.to_dict()) + "\n")
         elif record.project_id:
             path = self._file_path(record.project_id, by="project")
-            path.open("a", encoding="utf-8").write(
-                json.dumps(record.to_dict(), indent=2) + "\n"
-            )
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record.to_dict()) + "\n")
         else:
             raise ValueError("EvidenceRecord must have either task_id or project_id")
 

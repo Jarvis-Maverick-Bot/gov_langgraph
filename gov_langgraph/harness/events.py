@@ -80,8 +80,9 @@ class EventJournal:
             "timestamp": event.timestamp.isoformat(),
         }
 
+        # JSONL: one JSON object per line, no indent, no trailing comma
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(data, indent=2) + "\n")
+            f.write(json.dumps(data) + "\n")
 
     def append_raw(
         self,
