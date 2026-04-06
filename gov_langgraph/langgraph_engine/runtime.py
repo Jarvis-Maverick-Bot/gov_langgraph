@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal
+from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
 
 
 @dataclass
@@ -34,6 +34,7 @@ class RuntimeContext:
     store: StateStore
     checkpointer: Checkpointer
     event_journal: EventJournal
+    evidence_store: EvidenceStore
 
 
 # Module-level singleton
@@ -59,6 +60,7 @@ def init_runtime() -> RuntimeContext:
         store=StateStore(cfg.state_dir),
         checkpointer=Checkpointer(cfg),
         event_journal=EventJournal(cfg.event_dir),
+        evidence_store=EvidenceStore(cfg.state_dir / "evidence"),
     )
     return _runtime
 

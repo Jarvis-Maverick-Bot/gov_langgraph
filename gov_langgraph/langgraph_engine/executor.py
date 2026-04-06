@@ -172,7 +172,10 @@ class AgentExecutor:
         # Record handoff
         self._last_handoff = handoff
 
-        # Write event — journal failure is silently contained (pipeline continues)
+        # Write handoff to evidence store (so next stage can read it)
+        self._save_handoff(handoff)
+
+        # Write event to journal — journal failure is silently contained
         self._write_event(task_id, project_id, stage, initiator, handoff)
 
         return handoff
@@ -184,6 +187,23 @@ class AgentExecutor:
         """Set halted state with reason."""
         self.agent.halt(reason)
         self._halt_reason = reason
+
+    def _save_handoff(self, handoff: HandoffDocument) -> None:
+        """
+        Persist handoff to evidence store.
+
+        SILENTLY CONTAINED: evidence store failure does not halt the pipeline.
+        Next stage uses get_handoffs_for_task() to read prior handoffs.
+        """
+        try:
+            rt = get_runtime()
+            rt.evidence_store.append_handoff(
+                handoff=handoff,
+                actor_role=self.agent.role_name,
+            )
+        except Exception:
+            # Silently contained — pipeline continues
+            pass
 
     def _write_event(
         self,
@@ -202,24 +222,19 @@ class AgentExecutor:
         """
         try:
             rt = get_runtime()
+            # Build event summary with all key context inline
+            # (Event does not support a metadata dict field)
+            summary = (
+                f"{self.agent.role_name} took action '{self.agent.last_action}' "
+                f"in {stage}, produced {len(handoff.artifact_references)} artifact(s); "
+                f"initiator={initiator}, from={stage} to={handoff.to_stage}"
+            )
             event = Event(
                 event_type="agent_executed",
                 project_id=project_id,
                 task_id=task_id,
                 actor=self.agent.role_name,
-                event_summary=(
-                    f"{self.agent.role_name} took action '{self.agent.last_action}' "
-                    f"in {stage}, produced {len(handoff.artifact_references)} artifact(s)"
-                ),
-                metadata={
-                    "stage": stage,
-                    "initiator": initiator,  # who started the run
-                    "executing_role": self.agent.role_name,  # the actual executing role
-                    "action_taken": self.agent.last_action,  # explicit action
-                    "handoff_status": handoff.status,
-                    "artifact_count": len(handoff.artifact_references),
-                    "to_stage": handoff.to_stage,
-                },
+                event_summary=summary,
             )
             rt.event_journal.append(event)
         except Exception:

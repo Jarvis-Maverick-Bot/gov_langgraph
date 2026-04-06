@@ -39,6 +39,7 @@ class EvidenceType(str, Enum):
     CHECKPOINT_REF = "checkpoint_ref"
     COMMAND_OUTPUT = "command_output"
     SCREENSHOT = "screenshot"
+    HANDOFF = "handoff"
     OTHER = "other"
 
 
@@ -202,6 +203,53 @@ class EvidenceStore:
         )
         self.append(record)
         return record
+
+    def append_handoff(
+        self,
+        handoff: "gov_langgraph.platform_model.handoff_schema.HandoffDocument",
+        actor_role: str = "",
+    ) -> EvidenceRecord:
+        """
+        Persist a HandoffDocument as an evidence record.
+
+        The handoff document is serialized and stored as a JSON blob.
+        Next stage can retrieve it via get_handoffs_for_task().
+        """
+        # Serialize handoff to a temp path entry (JSON blob in description)
+        import json
+        handoff_json = json.dumps(handoff.to_dict(), indent=2, default=str)
+        record = EvidenceRecord(
+            evidence_type=EvidenceType.HANDOFF,
+            task_id=handoff.task_id,
+            project_id=handoff.project_id,
+            path="",  # handoff is stored inline as JSON, not as a file
+            description=handoff_json,
+            actor_role=actor_role or handoff.producer_role,
+            tags=[f"from_{handoff.from_stage}", f"to_{handoff.to_stage}"],
+        )
+        self.append(record)
+        return record
+
+    def get_handoffs_for_task(self, task_id: str) -> list["gov_langgraph.platform_model.handoff_schema.HandoffDocument"]:
+        """
+        Retrieve all handoff documents for a task.
+
+        Returns handoffs ordered by timestamp (oldest first).
+        Next stage uses this to read prior stage handoff before starting.
+        """
+        from gov_langgraph.platform_model.handoff_schema import HandoffDocument
+        records = self.get_for_task(task_id)
+        handoffs = []
+        for record in records:
+            if record.evidence_type == EvidenceType.HANDOFF and record.description:
+                import json
+                try:
+                    d = json.loads(record.description)
+                    handoffs.append(HandoffDocument.from_dict(d))
+                except Exception:
+                    pass
+        handoffs.sort(key=lambda h: h.timestamp)
+        return handoffs
 
     # --- Query ---
 
