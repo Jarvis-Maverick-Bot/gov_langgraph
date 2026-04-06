@@ -32,6 +32,11 @@ from gov_langgraph.platform_model import V1_PIPELINE_STAGES
 STAGE_SEQUENCE = V1_PIPELINE_STAGES
 
 
+# ─────────────────────────────────────────────────────────────────
+# _make_stage_stub() removed — stage nodes are now in nodes/viper_*.py
+# ─────────────────────────────────────────────────────────────────
+
+
 def _next_stage(current: str) -> str | type[END]:
     """Return the next stage after current, or END if at terminal."""
     idx = STAGE_SEQUENCE.index(current)
@@ -157,18 +162,3 @@ def _stage_router(state: GovernanceState) -> str:
         return "__handoff__"
     else:
         return "__halt__"
-
-
-def _make_stage_stub(stage: str):
-    """
-    Create a stub node for a stage.
-    Replaced by real implementation in Day 2.
-    """
-
-    def stub(state: GovernanceState):
-        return {
-            "current_action": "halt",
-            "halt_reason": f"{stage} node: not yet implemented",
-        }
-
-    return stub
