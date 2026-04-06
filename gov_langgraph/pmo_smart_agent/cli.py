@@ -270,8 +270,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="PMO Smart Agent CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("list", help="list <project_id>")
-    sub.add_parser("pipeline", help="pipeline <project_id>")
+    list_p = sub.add_parser("list", help="list <project_id>")
+    list_p.add_argument("project_id", help="Project ID")
+
+    pipe_p = sub.add_parser("pipeline", help="pipeline <project_id>")
+    pipe_p.add_argument("project_id", help="Project ID")
 
     status_p = sub.add_parser("status", help="status <task_id>")
     status_p.add_argument("task_id", help="Task ID")
@@ -291,8 +294,8 @@ def main() -> int:
 
     handlers = {
         "status": lambda: cmd_status(args.task_id),
-        "list": lambda: cmd_list(args.task_id),
-        "pipeline": lambda: cmd_pipeline(args.task_id),
+        "list": lambda: cmd_list(args.project_id),
+        "pipeline": lambda: cmd_pipeline(args.project_id),
         "events": lambda: cmd_events(args.task_id, args.project_id),
         "checkpoint": lambda: cmd_checkpoint(args.task_id),
         "evidence": lambda: cmd_evidence(args.task_id, args.project_id),
