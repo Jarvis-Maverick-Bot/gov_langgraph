@@ -192,8 +192,12 @@ class AgentExecutor:
         """
         Persist handoff to evidence store.
 
-        SILENTLY CONTAINED: evidence store failure does not halt the pipeline.
-        Next stage uses get_handoffs_for_task() to read prior handoffs.
+        SILENTLY CONTAINED (intentional): evidence store is non-governance-critical
+        persistence. A write failure here must NOT halt pipeline execution — the
+        handoff object is already returned to the caller and the pipeline must
+        continue. This is a "best-effort evidence" pattern, not a governance gate.
+
+        This silence must NOT spread to authority checks or other governance layers.
         """
         try:
             rt = get_runtime()
@@ -214,11 +218,14 @@ class AgentExecutor:
         handoff: HandoffDocument,
     ) -> None:
         """
-        Write agent execution event to the event journal.
+        Append an agent_executed event to the event journal.
 
-        SILENTLY CONTAINED: journal failure does not halt the pipeline.
-        This is intentional — governance events are important but the
-        pipeline should not crash over a journaling failure.
+        SILENTLY CONTAINED (intentional): the event journal is governance-audit
+        infrastructure, not a governance gate. A journal write failure must NOT
+        halt the pipeline — governance decisions have already been made and the
+        pipeline must continue. This is append-only audit, not enforcement.
+
+        This silence must NOT spread to authority checks or other governance layers.
         """
         try:
             rt = get_runtime()

@@ -212,8 +212,13 @@ class EvidenceStore:
         """
         Persist a HandoffDocument as an evidence record.
 
-        The handoff document is serialized and stored as a JSON blob.
-        Next stage can retrieve it via get_handoffs_for_task().
+        V1 STORAGE CHOICE (pragmatic): handoff is serialized inline as a JSON
+        string in the description field. This avoids creating a separate file
+        per handoff while keeping the evidence queryable. This is a pragmatic
+        V1 choice — NOT the final evidence model. A production system would
+        store handoffs as files and record the path reference here.
+
+        Next stage retrieves via get_handoffs_for_task().
         """
         # Serialize handoff to a temp path entry (JSON blob in description)
         import json
