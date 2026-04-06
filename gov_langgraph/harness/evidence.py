@@ -240,14 +240,24 @@ class EvidenceStore:
     # --- Linkage ---
 
     def link_to_gate(self, evidence_id: str, gate_id: str) -> None:
-        """Link an evidence record to a gate decision."""
-        # Load all records, update, rewrite
-        # This is a full rewrite because .jsonl doesn't support in-place update
-        # For high-volume use, consider a database instead
-        # For V1 this is acceptable
-        pass  # Implement if needed
+        """
+        Link an evidence record to a gate decision.
 
-    def get_linked_to_gate(self, gate_id: str) -> list[EvidenceRecord]:
-        """Get all evidence linked to a specific gate."""
-        # Would need full scan — implement if needed for V1
-        return []
+        Note: JSONL does not support in-place updates.
+        For V1, linkage is handled via Event.linked_gate_id or in-memory.
+        This method raises NotImplementedError.
+        """
+        raise NotImplementedError(
+            "EvidenceStore.link_to_gate requires a database backend for JSONL in-place update. "
+            "For V1, use Event.linked_gate_id or maintain linkage in-memory."
+        )
+
+    def get_linked_to_gate(self, gate_id: str, project_id: str) -> list[EvidenceRecord]:
+        """
+        Get all evidence linked to a specific gate.
+
+        Requires project_id to scope the search.
+        For V1 this is a full scan — acceptable given V1 scale.
+        """
+        all_records = self.get_for_project(project_id)
+        return [r for r in all_records if r.linked_gate_id == gate_id]

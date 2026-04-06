@@ -1,15 +1,17 @@
 """
 harness.checkpointer — Layer 2 Checkpoint Persistence
 
-Atomic save/load of WorkItem state transitions.
-Ensures state is never lost mid-transition.
+Non-atomic save/load of WorkItem state transitions.
+State is saved to disk at each checkpoint step — if session dies mid-transition,
+restore from the most recent completed checkpoint.
+
+Note: writes are sequential, not truly atomic. Use with discipline:
+always call checkpoint_before before advancing, checkpoint_after after.
 
 Lifecycle:
     before_transition: checkpoint current state (savepoint)
     after_transition: checkpoint new state (confirmed)
-    restore: reload from last checkpoint
-
-Resumability: if session dies mid-transition, restore from last checkpoint.
+    restore: reload from last completed checkpoint
 """
 
 from __future__ import annotations

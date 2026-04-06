@@ -29,30 +29,26 @@ from gov_langgraph.platform_model import (
 # ---------------------------------------------------------------------------
 
 
-def _serialize(obj: Any) -> dict[str, Any]:
+def _serialize(obj: Any) -> Any:
     """
-    Serialize a platform object to a JSON-serializable dict.
-    Handles enums, datetime, and dataclasses.
+    Serialize a value to a JSON-serializable type.
+    Handles: dataclasses, enums, datetime, list, dict.
     """
     if hasattr(obj, "__dataclass_fields__"):
-        result = {}
-        for name, field in obj.__dataclass_fields__.items():
-            value = getattr(obj, name)
-            result[name] = _serialize(value)
-        return result
-    elif isinstance(obj, enum_class := type(None).__class__.__mro__[0]):
-        if hasattr(obj, "value"):
-            return obj.value
-        return str(obj)
+        # Dataclass → dict
+        return {name: _serialize(getattr(obj, name)) for name in obj.__dataclass_fields__}
     elif isinstance(obj, enum.Enum):
+        # Enum → its value
         return obj.value
     elif isinstance(obj, datetime):
+        # Datetime → ISO string
         return obj.isoformat()
     elif isinstance(obj, list):
         return [_serialize(item) for item in obj]
     elif isinstance(obj, dict):
         return {k: _serialize(v) for k, v in obj.items()}
     else:
+        # Primitives (str, int, float, bool, None) pass through
         return obj
 
 

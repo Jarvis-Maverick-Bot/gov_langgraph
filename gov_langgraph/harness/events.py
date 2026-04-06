@@ -41,17 +41,19 @@ class EventJournal:
     Layer 3 rules:
         - Append only — never modify or delete
         - One event per line — easy to stream
-        - File rotation when max lines reached
+
+    Note: file rotation (max_lines_per_file) is not yet implemented.
+    For V1, a single file per project is sufficient.
     """
 
     def __init__(
         self,
         event_dir: Path | str,
-        max_lines_per_file: int = 10000,
+        max_lines_per_file: int = 10000,  # Reserved for future use
     ):
         self.event_dir = Path(event_dir)
         self.event_dir.mkdir(parents=True, exist_ok=True)
-        self.max_lines_per_file = max_lines_per_file
+        self._max_lines = max_lines_per_file
 
     def _journal_path(self, project_id: str) -> Path:
         return self.event_dir / f"events_{project_id}.jsonl"
