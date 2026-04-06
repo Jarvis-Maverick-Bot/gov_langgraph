@@ -45,7 +45,9 @@ def viper_dev_node(state: GovernanceState) -> NodeCommand:
         #   Layer 1: pre_execution_check — is viper_dev allowed in DEV?
         #   Layer 2: enforce_action — is "create_artifact" allowed for viper_dev?
         #   Layer 3: review_completion — does handoff satisfy governance?
-        handoff = executor.execute_with_enforcement(
+        # executor.execute_with_enforcement() saves handoff to evidence store internally
+        # handoff return value is intentionally unused here — node only needs advance/done
+        _ = executor.execute_with_enforcement(
             task_id=workitem.task_id,
             project_id=state.project_id,
             stage="DEV",

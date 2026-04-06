@@ -43,7 +43,9 @@ def viper_sa_node(state: GovernanceState) -> NodeCommand:
     try:
         # Execute with all 3 enforcement layers
         # SA action: create_artifact (produces SPEC)
-        handoff = executor.execute_with_enforcement(
+        # executor.execute_with_enforcement() saves handoff to evidence store internally
+        # handoff return value is intentionally unused here — node only needs advance/done
+        _ = executor.execute_with_enforcement(
             task_id=workitem.task_id,
             project_id=state.project_id,
             stage="SA",

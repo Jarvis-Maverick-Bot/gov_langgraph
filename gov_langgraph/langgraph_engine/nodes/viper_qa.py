@@ -49,7 +49,9 @@ def viper_qa_node(state: GovernanceState) -> NodeCommand:
         #   Layer 1: pre_execution_check — is viper_qa allowed in QA?
         #   Layer 2: enforce_action — is "create_artifact" allowed for viper_qa?
         #   Layer 3: review_completion — does handoff satisfy governance?
-        handoff = executor.execute_with_enforcement(
+        # executor.execute_with_enforcement() saves handoff to evidence store internally
+        # handoff return value is intentionally unused here — node only needs done/halt
+        _ = executor.execute_with_enforcement(
             task_id=workitem.task_id,
             project_id=state.project_id,
             stage="QA",
