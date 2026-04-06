@@ -26,7 +26,7 @@ def get_pipeline_view(project_id: str) -> dict:
     task_ids = store.list_workitems(project_id=project_id)
 
     by_stage: dict[str, list[dict]] = {}
-    for stage in ["BA", "SA", "DEV", "QA"]:
+    for stage in V1_PIPELINE_STAGES:
         by_stage[stage] = []
 
     for tid in task_ids:
