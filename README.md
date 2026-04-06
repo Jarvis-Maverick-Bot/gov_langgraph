@@ -103,21 +103,25 @@ gov_langgraph/
 
 ---
 
-## V1 Pipeline
+## V1 Authority Model
 
-**Stages:** `BA → SA → DEV → QA`
+**Tier 1 — Query only:** All roles can perform query actions (no mutations).
+
+**Tier 2 — Management Layer:** Governance actions (create, assign, approve, gate, close).
+- `alex` — final escalation, governance decisions
+- `nova` — chief auditing officer
+- `jarvis` — coordinator
+- `maverick` — PMO
+
+**Tier 3 — Delivery Layer:** Stage execution roles.
+- `viper_ba`, `viper_sa`, `viper_dev`, `viper_qa` — stage owners
+
+**V1 Pipeline Stages:** `BA → SA → DEV → QA`
 
 **Transitions:**
 - `BA` → `SA`
 - `SA` → `DEV`
 - `DEV` → `QA`
-
-**Roles:**
-- `alex` — final escalation (TIER 1)
-- `nova` — chief auditing officer (TIER 2)
-- `jarvis` — coordinator (TIER 2)
-- `maverick` — PMO (TIER 3 management)
-- `viper_ba`, `viper_sa`, `viper_dev`, `viper_qa` — stage owners (TIER 3)
 
 ---
 
