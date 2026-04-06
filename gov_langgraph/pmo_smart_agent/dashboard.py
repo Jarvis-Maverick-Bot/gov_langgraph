@@ -8,7 +8,7 @@ Blocked workitems highlighted.
 from __future__ import annotations
 
 from gov_langgraph.harness import HarnessConfig, StateStore
-from gov_langgraph.platform_model import Project
+from gov_langgraph.platform_model import Project, V1_PIPELINE_STAGES
 
 
 def get_pipeline_view(project_id: str) -> dict:
@@ -82,7 +82,7 @@ def render_pipeline_text(project_id: str) -> str:
     ]
 
     blocked_total = 0
-    for stage in ["BA", "SA", "DEV", "QA"]:
+    for stage in V1_PIPELINE_STAGES:
         items = view["stages"].get(stage, [])
         if not items:
             lines.append(f"[{stage}] (empty)")
@@ -103,6 +103,6 @@ def render_pipeline_text(project_id: str) -> str:
         lines.append("")
 
     if blocked_total:
-        lines.append(f"⚠ {blocked_total} task(s) blocked overall")
+        lines.append(f"{blocked_total} task(s) blocked overall")
 
     return "\n".join(lines)

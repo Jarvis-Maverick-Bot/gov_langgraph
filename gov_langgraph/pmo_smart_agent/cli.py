@@ -21,7 +21,7 @@ import sys
 from typing import Optional
 
 from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
-from gov_langgraph.platform_model import Project, WorkItem, TaskState, Workflow
+from gov_langgraph.platform_model import Project, WorkItem, TaskState, Workflow, V1_PIPELINE_STAGES
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +238,7 @@ def cmd_pipeline(project_id: str) -> str:
                 by_stage[stage] = []
             by_stage[stage].append(w)
 
-        for stage in ["BA", "SA", "DEV", "QA"]:
+        for stage in V1_PIPELINE_STAGES:
             items = by_stage.get(stage, [])
             if items:
                 lines.append(f"  {stage}:")

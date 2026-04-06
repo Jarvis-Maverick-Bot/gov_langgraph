@@ -62,6 +62,14 @@ from .state_machine import (
     TransitionRecord,
 )
 
+# ---------------------------------------------------------------------------
+# Workflows (single source for V1 pipeline definition)
+# ---------------------------------------------------------------------------
+from .workflows import (
+    V1_PIPELINE_STAGES,
+    get_v1_pipeline_workflow,
+)
+
 __all__ = [
     # Exceptions
     "PlatformException",
@@ -92,4 +100,7 @@ __all__ = [
     # State Machine
     "StateMachine",
     "TransitionRecord",
+    # Workflows
+    "V1_PIPELINE_STAGES",
+    "get_v1_pipeline_workflow",
 ]

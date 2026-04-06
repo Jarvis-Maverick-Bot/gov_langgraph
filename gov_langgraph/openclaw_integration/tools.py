@@ -20,6 +20,7 @@ from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, Event
 from gov_langgraph.platform_model import (
     Project, WorkItem, TaskState, Workflow,
     Role, TaskStatus, Handoff, Gate, GateDecision, Event,
+    get_v1_pipeline_workflow,
 )
 from gov_langgraph.platform_model.state_machine import StateMachine
 from gov_langgraph.platform_model.authority import Action, check_authority
@@ -56,31 +57,16 @@ def init_harness() -> dict:
     return _harness
 
 
+# (removed _default_workflow — now imported from platform_model.workflows)
+
+
 def _sm() -> StateMachine:
     """Get a StateMachine wired with harness instances."""
     h = _harness
     return StateMachine(
-        workflow=_default_workflow(),
+        workflow=get_v1_pipeline_workflow(),
         checkpointer=h["checkpointer"],
         event_journal=h["journal"],
-    )
-
-
-def _default_workflow() -> Workflow:
-    """
-    Return the default V1 pipeline workflow.
-    In V1 this is hardcoded; future versions load from config.
-    """
-    return Workflow(
-        workflow_name="V1 Pipeline",
-        domain_type="internal",
-        stage_list=["BA", "SA", "DEV", "QA"],
-        allowed_transitions={
-            "BA": ["SA"],
-            "SA": ["DEV"],
-            "DEV": ["QA"],
-            "QA": [],
-        },
     )
 
 
