@@ -1,22 +1,23 @@
 """
-langgraph_engine.graph — LangGraph StateGraph scaffold
+langgraph_engine.graph — LangGraph StateGraph
 
-Graph structure:
-    START -> maverick
-    maverick -> (conditional on workitem.current_stage) -> BA | SA | DEV | QA | END
-    BA -> (conditional on action) -> SA | DEV | QA | END
-    SA -> (conditional on action) -> DEV | QA | END
-    DEV -> (conditional on action) -> QA | END
-    QA -> (conditional on action) -> END
+V1 Pipeline graph: START -> maverick -> stage nodes -> END
 
-Stage routing:
-    - "advance" -> next stage (or END if at QA)
-    - "halt" -> END (graph stops, checkpoint saved)
-    - "done" -> END (normal completion)
+Edge routing (explicit, governed):
+  maverick routes to current stage based on workitem.current_stage
 
-Maverick routing:
-    - Routes to the stage matching workitem.current_stage
-    - Halts on: halt_reason, workitem missing, block, done, gate_rejected
+  After stage node executes, _stage_router maps current_action:
+    - "advance"  -> next stage (BA->SA->DEV->QA)
+    - "block"    -> END (blocked, workflow-visible, awaiting escalation)
+    - "halt"     -> END (halt, checkpoint saved)
+    - "done"     -> END (normal completion at QA)
+    - "gate_approved" -> advance to next stage
+    - "gate_rejected"  -> END (halt, await intervention)
+    - "handoff"  -> END (awaiting acceptance)
+    - (unknown)   -> END (halt for safety)
+
+GovernanceState carries blocker/halt_reason for visibility.
+No automatic re-routing on rejection — halt is explicit.
 """
 
 from __future__ import annotations
@@ -80,6 +81,7 @@ def build_graph() -> StateGraph:
             "__stage_SA__": "__stage_SA__",
             "__stage_DEV__": "__stage_DEV__",
             "__stage_QA__": "__stage_QA__",
+            "__end__": END,  # END returned directly when halting
         },
     )
 
@@ -88,9 +90,12 @@ def build_graph() -> StateGraph:
         node_name = f"__stage_{stage}__"
         next_node = _next_stage(stage)
         edge_map = {
-            "__advance__": next_node,
-            "__halt__": END,
-            "__done__": END,
+            "__advance__": next_node,       # advance -> next stage
+            "__done__": END,                 # done -> END
+            "__halt__": END,                # halt -> END
+            "__block__": END,               # block -> END
+            "__gate_rejected__": END,       # gate_rejected -> END (halt)
+            "__handoff__": END,             # handoff -> END (await acceptance)
         }
         graph.add_conditional_edges(node_name, _stage_router, edge_map)
 
@@ -98,10 +103,24 @@ def build_graph() -> StateGraph:
 
 
 def _maverick_router(state: GovernanceState) -> str:
-    """Maverick routes to the current stage based on workitem."""
-    if state.halt_reason or state.current_action == "halt":
+    """
+    Maverick routes to the current stage.
+
+    Routing rules (checked in order):
+    - halt_reason present -> END (already halted, no routing needed)
+    - current_action=halt -> END
+    - current_action=block -> END (blocked, awaiting escalation)
+    - workitem missing -> END
+    - otherwise -> current stage node
+
+    Note: done/gate_rejected/handoff are NOT checked here.
+    Those are handled by stage_router after the stage node executes.
+    """
+    if state.halt_reason:
         return END
-    if state.current_action in ("block", "done", "gate_rejected"):
+    if state.current_action == "halt":
+        return END
+    if state.current_action == "block":
         return END
     if state.workitem is None:
         return END
@@ -109,14 +128,34 @@ def _maverick_router(state: GovernanceState) -> str:
 
 
 def _stage_router(state: GovernanceState) -> str:
-    """Stage node routes based on the action it set in state."""
+    """
+    Stage node routes based on the action set by the node.
+
+    Routing:
+    - advance / gate_approved -> next stage
+    - done -> END (normal completion)
+    - halt -> END (error halt)
+    - block -> END (blocked, awaiting escalation)
+    - gate_rejected -> END (await intervention)
+    - handoff -> END (await acceptance)
+    - unknown -> END (safety)
+    """
     action = state.current_action
     if action == "advance":
         return "__advance__"
-    elif action in ("halt", "done", "gate_rejected"):
+    elif action == "done":
+        return "__done__"
+    elif action == "halt":
         return "__halt__"
+    elif action == "block":
+        return "__block__"
+    elif action == "gate_approved":
+        return "__advance__"
+    elif action == "gate_rejected":
+        return "__gate_rejected__"
+    elif action == "handoff":
+        return "__handoff__"
     else:
-        # Unknown action — halt for safety
         return "__halt__"
 
 

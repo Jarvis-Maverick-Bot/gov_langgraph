@@ -20,30 +20,42 @@ from gov_langgraph.langgraph_engine.nodes.base import NodeCommand
 
 def maverick_node(state: GovernanceState) -> NodeCommand:
     """
-    Maverick coordinator node.
+    Maverick coordinator node — runs at start of each graph step.
 
     Responsibilities:
     - Verify workitem is loaded
-    - Check current stage and blocked status
-    - Route to the appropriate stage node based on current_stage
+    - Check for blockers and halt conditions
+    - Route to the appropriate stage node
+
+    Routing:
+    Maverick checks halt/block conditions first.
+    If none, it returns advance and the maverick_router routes to the current stage node.
+    The stage node's current_action controls what happens after it executes.
 
     Returns:
-        NodeCommand with action="advance" (routes to current stage node via edges)
+        NodeCommand: block (halt with blocker visibility) or advance (route to stage)
     """
     if state.workitem is None:
         return {
-            "action": "halt",
+            "current_action": "halt",
             "halt_reason": "maverick: workitem not loaded",
         }
 
-    if state.blocked:
+    # Check halt conditions — these stop before even reaching a stage
+    if state.halt_reason:
         return {
-            "action": "block",
+            "current_action": "halt",
+        }
+
+    # Detect blocker — set block action for visibility, halt via maverick_router
+    if state.blocked and state.blocker:
+        return {
+            "current_action": "block",
             "blocked": True,
             "blocker": state.blocker,
         }
 
     # Route to current stage node
     return {
-        "action": "advance",
+        "current_action": "advance",
     }
