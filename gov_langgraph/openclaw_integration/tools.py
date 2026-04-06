@@ -335,7 +335,7 @@ def approve_gate_tool(input: dict) -> dict:
         return {
             "ok": True,
             "gate_id": gate.gate_id,
-            "gate_type": gate_type,
+            "gate_type": gate.gate_type,
             "stage": gate.stage,
             "task_id": task_id,
             "message": f"Gate approved at stage '{gate.stage}'",
@@ -388,7 +388,7 @@ def reject_gate_tool(input: dict) -> dict:
         return {
             "ok": True,
             "gate_id": gate.gate_id,
-            "gate_type": gate_type,
+            "gate_type": gate.gate_type,
             "stage": gate.stage,
             "task_id": task_id,
             "message": f"Gate rejected at stage '{gate.stage}'",

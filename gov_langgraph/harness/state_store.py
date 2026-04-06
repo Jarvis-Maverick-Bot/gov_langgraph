@@ -20,6 +20,8 @@ from gov_langgraph.platform_model import (
     WorkItem,
     TaskState,
     Workflow,
+    Gate,
+    Handoff,
     ObjectNotFoundError,
 )
 
@@ -98,6 +100,16 @@ class StateStore:
         data = _serialize(workflow)
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
+    def save_gate(self, gate: Gate) -> None:
+        path = self._path("gate", gate.gate_id)
+        data = _serialize(gate)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def save_handoff(self, handoff: Handoff) -> None:
+        path = self._path("handoff", handoff.handoff_id)
+        data = _serialize(handoff)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
     # --- Load ---
 
     def _load_dict(self, path: Path) -> dict[str, Any]:
@@ -132,6 +144,20 @@ class StateStore:
             raise ObjectNotFoundError("Workflow", workflow_id)
         data = self._load_dict(path)
         return _dict_to_workflow(data)
+
+    def load_gate(self, gate_id: str) -> Gate:
+        path = self._path("gate", gate_id)
+        if not path.exists():
+            raise ObjectNotFoundError("Gate", gate_id)
+        data = self._load_dict(path)
+        return _dict_to_gate(data)
+
+    def load_handoff(self, handoff_id: str) -> Handoff:
+        path = self._path("handoff", handoff_id)
+        if not path.exists():
+            raise ObjectNotFoundError("Handoff", handoff_id)
+        data = self._load_dict(path)
+        return _dict_to_handoff(data)
 
     # --- Exists ---
 
@@ -252,4 +278,34 @@ def _dict_to_workflow(data: dict) -> Workflow:
         stage_role_map=data.get("stage_role_map", {}),
         default_handoff_points=data.get("default_handoff_points", []),
         default_gate_points=data.get("default_gate_points", []),
+    )
+
+
+def _dict_to_gate(data: dict) -> Gate:
+    from gov_langgraph.platform_model import GateDecision  # avoid circular
+    return Gate(
+        task_id=data["task_id"],
+        stage=data["stage"],
+        gate_type=data.get("gate_type", "approval"),
+        decision=GateDecision(data["decision"]) if data.get("decision") else None,
+        decision_by=data.get("decision_by"),
+        decision_note=data.get("decision_note", ""),
+        gate_id=data["gate_id"],
+        decided_at=datetime.fromisoformat(data["decided_at"]) if data.get("decided_at") else None,
+    )
+
+
+def _dict_to_handoff(data: dict) -> Handoff:
+    from gov_langgraph.platform_model import HandoffStatus  # avoid circular
+    return Handoff(
+        task_id=data["task_id"],
+        from_stage=data["from_stage"],
+        to_stage=data["to_stage"],
+        from_owner=data["from_owner"],
+        to_owner=data["to_owner"],
+        deliverable_reference=data.get("deliverable_reference"),
+        handoff_note=data.get("handoff_note", ""),
+        handoff_id=data["handoff_id"],
+        handoff_status=HandoffStatus(data["handoff_status"]) if data.get("handoff_status") else HandoffStatus.PENDING,
+        created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
     )
