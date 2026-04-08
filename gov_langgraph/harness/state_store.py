@@ -221,11 +221,11 @@ class StateStore:
         gates.sort(key=lambda g: g.decided_at or datetime.min, reverse=True)
         return gates
 
-    def get_pending_gate_for_stage(self, task_id: str, stage: str) -> Gate | None:
-        """Return the pending gate for a task+stage if no decision has been made yet.
-        
-        Logic: a gate is pending if no Gate record exists for this task+stage.
-        If a Gate record exists (approved or rejected), it is already decided.
+    def get_gate_decision_for_stage(self, task_id: str, stage: str) -> Gate | None:
+        """Return the gate decision for a task+stage, or None if no decision recorded yet.
+
+        Returns the existing Gate record (approved/rejected) if one exists.
+        Returns None if no gate record exists for this task+stage (gate is still pending).
         """
         for p in self.state_dir.glob("gate_*.json"):
             gate_id = p.stem.split("_", 1)[1]

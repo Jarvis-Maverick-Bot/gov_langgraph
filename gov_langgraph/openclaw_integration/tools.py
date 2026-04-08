@@ -316,7 +316,7 @@ def approve_gate_tool(input: dict) -> dict:
         stage = workitem.current_stage
 
         # Check if already decided
-        existing = h["store"].get_pending_gate_for_stage(task_id, stage)
+        existing = h["store"].get_gate_decision_for_stage(task_id, stage)
         if existing is not None:
             return {
                 "ok": False,
@@ -390,7 +390,7 @@ def reject_gate_tool(input: dict) -> dict:
         stage = workitem.current_stage
 
         # Check if already decided
-        existing = h["store"].get_pending_gate_for_stage(task_id, stage)
+        existing = h["store"].get_gate_decision_for_stage(task_id, stage)
         if existing is not None:
             return {
                 "ok": False,
@@ -534,7 +534,7 @@ def get_gate_panel_tool(input: dict) -> dict:
         current_stage = workitem.current_stage
 
         # Check if a gate decision exists for this task+stage
-        gate = h["store"].get_pending_gate_for_stage(task_id, current_stage)
+        gate = h["store"].get_gate_decision_for_stage(task_id, current_stage)
 
         if gate is None:
             gate_status = "pending"
