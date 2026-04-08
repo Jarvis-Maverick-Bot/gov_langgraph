@@ -17,12 +17,13 @@ sys.path.insert(0, os.path.join(_ROOT, ".."))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from gov_langgraph.openclaw_integration.tools import (
     init_harness,
     get_status_tool,
+    get_gate_panel_tool,
     approve_gate_tool,
     reject_gate_tool,
     create_task_tool,
@@ -83,7 +84,7 @@ def gate_approve(body: dict):
             raise HTTPException(status_code=422, detail=f"Missing field: {field}")
     result = approve_gate_tool(body)
     if not result.get("ok", False):
-        raise HTTPException(status_code=400, detail=result.get("message", "Approval failed"))
+        return JSONResponse(content=result, status_code=400)
     return result
 
 
@@ -95,7 +96,7 @@ def gate_reject(body: dict):
             raise HTTPException(status_code=422, detail=f"Missing field: {field}")
     result = reject_gate_tool(body)
     if not result.get("ok", False):
-        raise HTTPException(status_code=400, detail=result.get("message", "Rejection failed"))
+        return JSONResponse(content=result, status_code=400)
     return result
 
 
@@ -116,6 +117,15 @@ def tasks(project_id: str):
     result = list_tasks_tool({"project_id": project_id})
     if not result.get("ok", False):
         raise HTTPException(status_code=400, detail=result.get("message", "Failed to list tasks"))
+    return result
+
+
+@app.get("/gate/{task_id}")
+def gate_panel(task_id: str):
+    """Get gate panel for a task — PMO gate confirmation surface."""
+    result = get_gate_panel_tool({"task_id": task_id})
+    if not result.get("ok", False):
+        raise HTTPException(status_code=404, detail=result.get("message", "Task not found"))
     return result
 
 

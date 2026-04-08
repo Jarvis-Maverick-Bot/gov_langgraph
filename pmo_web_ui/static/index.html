@@ -45,7 +45,7 @@
       flex-wrap: wrap;
       margin-bottom: 0.75rem;
     }
-    input {
+    input, textarea {
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 4px;
@@ -54,11 +54,10 @@
       font-size: 0.875rem;
       min-width: 160px;
       flex: 1;
+      font-family: inherit;
     }
-    input:focus {
-      outline: none;
-      border-color: #3b82f6;
-    }
+    textarea { min-height: 60px; resize: vertical; }
+    input:focus, textarea:focus { outline: none; border-color: #3b82f6; }
     button {
       background: #3b82f6;
       color: #fff;
@@ -75,6 +74,8 @@
     button.danger:hover { background: #dc2626; }
     button.success { background: #22c55e; }
     button.success:hover { background: #16a34a; }
+    button.secondary { background: #475569; }
+    button.secondary:hover { background: #64748b; }
     .output {
       background: #0f172a;
       border: 1px solid #334155;
@@ -91,21 +92,103 @@
     }
     .output.ok { border-color: #22c55e; }
     .output.error { border-color: #ef4444; }
+    .output.warn { border-color: #f59e0b; }
     .two-col {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 1rem;
     }
+    /* Gate panel */
+    .gate-panel {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .gate-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid #334155;
+    }
+    .gate-title { font-size: 1rem; font-weight: 600; color: #f8fafc; }
+    .gate-task-id { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+    .gate-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.05em;
+    }
+    .badge-pending { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
+    .badge-approved { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+    .badge-rejected { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+    .gate-meta {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.25rem 1rem;
+      font-size: 0.8rem;
+      margin-bottom: 0.75rem;
+    }
+    .gate-meta dt { color: #64748b; }
+    .gate-meta dd { color: #cbd5e1; }
+    .gate-evidence {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      margin-bottom: 1rem;
+    }
+    .gate-evidence-title { font-weight: 600; color: #94a3b8; margin-bottom: 0.25rem; }
+    .gate-evidence-note { font-style: italic; color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; }
+    .gate-decision-area { }
+    .gate-already-decided {
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.75rem;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .already-approved { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+    .already-rejected { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+    .decision-note-hint {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.25rem;
+    }
+    .rejection-required { color: #ef4444; font-size: 0.8rem; margin-top: 0.25rem; }
+    .gate-actor-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .gate-actor-row input { min-width: 200px; }
     @media (max-width: 640px) {
       .two-col { grid-template-columns: 1fr; }
-      input { min-width: 100%; }
+      input, textarea { min-width: 100%; }
+      .gate-actor-row { flex-direction: column; }
     }
   </style>
 </head>
 <body>
 
   <h1>PMO Web UI</h1>
-  <p class="subtitle">gov_langgraph — non-authoritative mirror (source of truth)</p>
+  <p class="subtitle">gov_langgraph — non-authoritative shell</p>
+
+  <!-- ── GATE PANEL ── -->
+  <div class="section">
+    <div class="section-title">Gate Confirmation</div>
+    <div class="form-row">
+      <input id="gate-task-id" placeholder="Task ID" style="max-width:320px" />
+      <button onclick="doLoadGate()">Load Gate</button>
+    </div>
+    <div id="gate-panel"></div>
+  </div>
 
   <!-- ── VIEW STATUS ── -->
   <div class="section">
@@ -117,40 +200,9 @@
     <div class="output" id="status-output">Response will appear here…</div>
   </div>
 
-  <!-- ── APPROVE / REJECT GATE ── -->
-  <div class="two-col">
-    <div class="section">
-      <div class="section-title">Approve Gate</div>
-      <div class="form-row">
-        <input id="approve-task-id" placeholder="Task ID" />
-        <input id="approve-gate-name" placeholder="Gate name" value="DEFAULT" />
-      </div>
-      <div class="form-row">
-        <input id="approve-actor" placeholder="Actor (role)" />
-        <input id="approve-notes" placeholder="Notes (optional)" />
-      </div>
-      <button class="success" onclick="doApprove()">Approve</button>
-      <div class="output" id="approve-output">Response will appear here…</div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Reject Gate</div>
-      <div class="form-row">
-        <input id="reject-task-id" placeholder="Task ID" />
-        <input id="reject-gate-name" placeholder="Gate name" value="DEFAULT" />
-      </div>
-      <div class="form-row">
-        <input id="reject-actor" placeholder="Actor (role)" />
-        <input id="reject-notes" placeholder="Notes (optional)" />
-      </div>
-      <button class="danger" onclick="doReject()">Reject</button>
-      <div class="output" id="reject-output">Response will appear here…</div>
-    </div>
-  </div>
-
   <!-- ── KICKOFF ── -->
   <div class="section">
-    <div class="section-title">Kickoff (Create Task)</div>
+    <div class="section-title">Announce Kickoff</div>
     <div class="form-row">
       <input id="kickoff-title" placeholder="Task title" />
       <input id="kickoff-project" placeholder="Project ID" />
@@ -180,12 +232,143 @@
 <script>
   const BASE = '';
 
-  function show(elId, data, ok) {
+  function show(elId, data, ok, warn) {
     const el = document.getElementById(elId);
     el.textContent = JSON.stringify(data, null, 2);
-    el.className = 'output ' + (ok ? 'ok' : 'error');
+    el.className = 'output ' + (warn ? 'warn' : (ok ? 'ok' : 'error'));
   }
 
+  // ── Gate Panel ──
+  async function doLoadGate() {
+    const taskId = document.getElementById('gate-task-id').value.trim();
+    if (!taskId) { alert('Task ID required'); return; }
+    const panel = document.getElementById('gate-panel');
+    try {
+      const r = await fetch(`${BASE}/gate/${encodeURIComponent(taskId)}`);
+      const d = await r.json();
+      if (!d.ok) {
+        panel.innerHTML = `<div class="output error">${d.message || 'Failed to load gate'}</div>`;
+        return;
+      }
+      renderGatePanel(d);
+    } catch(e) {
+      panel.innerHTML = `<div class="output error">${e.message}</div>`;
+    }
+  }
+
+  function renderGatePanel(d) {
+    const panel = document.getElementById('gate-panel');
+    const badgeClass = d.gate_status === 'approved' ? 'badge-approved'
+                     : d.gate_status === 'rejected' ? 'badge-rejected'
+                     : 'badge-pending';
+    const badgeLabel = d.gate_status === 'approved' ? 'Already approved'
+                     : d.gate_status === 'rejected' ? 'Already rejected'
+                     : 'Pending decision';
+
+    // Gate type label
+    const gateLabel = d.gate_type && d.gate_type !== 'stage_advance'
+      ? d.gate_type.replace(/_/g, ' ')
+      : `${d.gate_stage} Gate`;
+
+    let decisionHTML = '';
+    if (d.gate_status === 'pending') {
+      decisionHTML = `
+        <div class="gate-decision-area">
+          <div class="form-row">
+            <textarea id="gate-notes" placeholder="Decision note (optional — annotation only, not governance evidence)"></textarea>
+          </div>
+          <div class="form-row">
+            <input id="gate-actor" placeholder="Your name / role" style="max-width:200px" />
+            <button class="success" onclick="doGateApprove('${d.task_id}', '${d.gate_stage}')">Approve</button>
+            <button class="danger" onclick="doGateReject('${d.task_id}', '${d.gate_stage}')">Reject</button>
+          </div>
+          <p class="rejection-required" id="reject-error" style="display:none"></p>
+        </div>`;
+    } else {
+      const decidedClass = d.gate_status === 'approved' ? 'already-approved' : 'already-rejected';
+      const decidedLabel = d.gate_status === 'approved' ? 'Already approved' : 'Already rejected';
+      const decidedBy = d.gate_decision_by ? ` by ${d.gate_decision_by}` : '';
+      const decidedAt = d.gate_decided_at ? `<br>${new Date(d.gate_decided_at).toLocaleString()}` : '';
+      const decidedNote = d.gate_decision_note ? `<br>Note: ${d.gate_decision_note}` : '';
+      decisionHTML = `<div class="gate-already-decided ${decidedClass}">${decidedLabel}${decidedBy}${decidedAt}${decidedNote}</div>`;
+    }
+
+    panel.innerHTML = `
+      <div class="gate-panel">
+        <div class="gate-header">
+          <div>
+            <div class="gate-title">${d.task_title}</div>
+            <div class="gate-task-id">${d.task_id}</div>
+          </div>
+          <span class="gate-badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        <dl class="gate-meta">
+          <dt>Stage</dt><dd>${d.current_stage}</dd>
+          <dt>Gate</dt><dd>${gateLabel}</dd>
+          <dt>Owner</dt><dd>${d.current_owner || '—'}</dd>
+        </dl>
+        <div class="gate-evidence">
+          <div class="gate-evidence-title">Evidence summary</div>
+          <div>Evidence is drafted by BA/Jarvis. PMO displays only.</div>
+          <div class="gate-evidence-note">Evidence pending — does not block your decision.</div>
+        </div>
+        ${decisionHTML}
+      </div>`;
+  }
+
+  async function doGateApprove(taskId, stage) {
+    const actor = document.getElementById('gate-actor').value.trim();
+    const notes = document.getElementById('gate-notes').value.trim();
+    if (!actor) { alert('Your name/role is required'); return; }
+    try {
+      const r = await fetch(`${BASE}/gate/approve`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({task_id: taskId, gate_name: stage + '_GATE', actor, notes}),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        // Reload panel to show updated state
+        document.getElementById('gate-panel').innerHTML +=
+          `<div class="output ok" style="margin-top:0.5rem">${d.message}</div>`;
+        setTimeout(() => doLoadGate(), 800);
+      } else {
+        document.getElementById('gate-panel').querySelector('.gate-panel').insertAdjacentHTML('beforeend',
+          `<div class="output error" style="margin-top:0.5rem">${d.message}</div>`);
+      }
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  async function doGateReject(taskId, stage) {
+    const actor = document.getElementById('gate-actor').value.trim();
+    const notes = document.getElementById('gate-notes').value.trim();
+    const errEl = document.getElementById('reject-error');
+    if (!actor) { errEl.textContent = 'Your name/role is required'; errEl.style.display = 'block'; return; }
+    if (!notes) { errEl.textContent = 'Rejection reason is required'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    try {
+      const r = await fetch(`${BASE}/gate/reject`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({task_id: taskId, gate_name: stage + '_GATE', actor, notes}),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        document.getElementById('gate-panel').innerHTML +=
+          `<div class="output ok" style="margin-top:0.5rem">${d.message}</div>`;
+        setTimeout(() => doLoadGate(), 800);
+      } else {
+        errEl.textContent = d.message || 'Rejection failed';
+        errEl.style.display = 'block';
+      }
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  // ── Status ──
   async function doStatus() {
     const taskId = document.getElementById('status-task-id').value.trim();
     if (!taskId) { alert('Task ID required'); return; }
@@ -194,52 +377,11 @@
       const d = await r.json();
       show('status-output', d, d.ok);
     } catch(e) {
-      show('status-output', {error: e.message}, false);
+      show('status-output', {error: e.message}, false, false);
     }
   }
 
-  async function doApprove() {
-    const body = {
-      task_id: document.getElementById('approve-task-id').value.trim(),
-      gate_name: document.getElementById('approve-gate-name').value.trim() || 'DEFAULT',
-      actor: document.getElementById('approve-actor').value.trim(),
-      notes: document.getElementById('approve-notes').value.trim(),
-    };
-    if (!body.task_id || !body.actor) { alert('Task ID and Actor required'); return; }
-    try {
-      const r = await fetch(`${BASE}/gate/approve`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(body),
-      });
-      const d = await r.json();
-      show('approve-output', d, d.ok);
-    } catch(e) {
-      show('approve-output', {error: e.message}, false);
-    }
-  }
-
-  async function doReject() {
-    const body = {
-      task_id: document.getElementById('reject-task-id').value.trim(),
-      gate_name: document.getElementById('reject-gate-name').value.trim() || 'DEFAULT',
-      actor: document.getElementById('reject-actor').value.trim(),
-      notes: document.getElementById('reject-notes').value.trim(),
-    };
-    if (!body.task_id || !body.actor) { alert('Task ID and Actor required'); return; }
-    try {
-      const r = await fetch(`${BASE}/gate/reject`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(body),
-      });
-      const d = await r.json();
-      show('reject-output', d, d.ok);
-    } catch(e) {
-      show('reject-output', {error: e.message}, false);
-    }
-  }
-
+  // ── Kickoff ──
   async function doKickoff() {
     const body = {
       task_title: document.getElementById('kickoff-title').value.trim(),
@@ -261,10 +403,11 @@
       const d = await r.json();
       show('kickoff-output', d, d.ok);
     } catch(e) {
-      show('kickoff-output', {error: e.message}, false);
+      show('kickoff-output', {error: e.message}, false, false);
     }
   }
 
+  // ── List ──
   async function doList() {
     const projectId = document.getElementById('list-project').value.trim();
     if (!projectId) { alert('Project ID required'); return; }
@@ -273,7 +416,7 @@
       const d = await r.json();
       show('list-output', d, d.ok);
     } catch(e) {
-      show('list-output', {error: e.message}, false);
+      show('list-output', {error: e.message}, false, false);
     }
   }
 </script>

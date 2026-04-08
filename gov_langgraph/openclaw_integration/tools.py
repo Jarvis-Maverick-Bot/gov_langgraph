@@ -293,30 +293,43 @@ def submit_handoff_tool(input: dict) -> dict:
 
 def approve_gate_tool(input: dict) -> dict:
     """
-    Approve a gate for a task.
+    Approve a gate for a task. Idempotent — returns existing gate if already decided.
 
     Args:
         input: {
             task_id: str,
             gate_name: str,
             actor: str,
-            notes: str (optional),
+            notes: str (optional — annotation only, not governance evidence),
         }
     Returns:
-        {ok: bool, gate_id: str, message: str}
+        {ok: bool, gate_id: str, gate_status: str, message: str}
     """
     try:
         h = _harness
         task_id = input["task_id"]
-        gate_name = input.get("gate_name", "DEFAULT")
+        gate_name = input.get("gate_name", "stage_advance")
         actor = input.get("actor", "unknown")
         notes = input.get("notes", "")
 
         workitem = h["store"].load_workitem(task_id)
+        stage = workitem.current_stage
+
+        # Check if already decided
+        existing = h["store"].get_pending_gate_for_stage(task_id, stage)
+        if existing is not None:
+            return {
+                "ok": False,
+                "gate_id": existing.gate_id,
+                "gate_status": existing.decision.value if existing.decision else "pending",
+                "task_id": task_id,
+                "message": f"Gate at '{stage}' already has a decision: {existing.decision.value}",
+            }
+
         gate = Gate(
             task_id=task_id,
-            stage=workitem.current_stage,
-            gate_type="approval",
+            stage=stage,
+            gate_type=gate_name,
             decision=GateDecision.APPROVED,
             decision_by=actor,
             decision_note=notes,
@@ -326,19 +339,20 @@ def approve_gate_tool(input: dict) -> dict:
         h["journal"].append_raw(
             project_id=workitem.project_id,
             event_type="gate_approved",
-            event_summary=f"Gate '{gate_name}' approved for task '{task_id}'",
+            event_summary=f"Gate at '{stage}' approved by '{actor}'",
             actor=actor,
             task_id=task_id,
-            related_stage=workitem.current_stage,
+            related_stage=stage,
         )
 
         return {
             "ok": True,
             "gate_id": gate.gate_id,
+            "gate_status": "approved",
             "gate_type": gate.gate_type,
             "stage": gate.stage,
             "task_id": task_id,
-            "message": f"Gate approved at stage '{gate.stage}'",
+            "message": f"Gate approved at stage '{stage}'.",
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "message": f"Failed to approve gate: {e}"}
@@ -346,30 +360,50 @@ def approve_gate_tool(input: dict) -> dict:
 
 def reject_gate_tool(input: dict) -> dict:
     """
-    Reject a gate for a task.
+    Reject a gate for a task. Requires a reason.
 
     Args:
         input: {
             task_id: str,
             gate_name: str,
             actor: str,
-            notes: str (optional),
+            notes: str (required — reason for rejection),
         }
     Returns:
-        {ok: bool, gate_id: str, message: str}
+        {ok: bool, gate_id: str, gate_status: str, message: str}
     """
     try:
         h = _harness
         task_id = input["task_id"]
-        gate_name = input.get("gate_name", "DEFAULT")
+        gate_name = input.get("gate_name", "stage_advance")
         actor = input.get("actor", "unknown")
         notes = input.get("notes", "")
 
+        if not notes.strip():
+            return {
+                "ok": False,
+                "error": "reason_required",
+                "message": "Rejection reason is required.",
+            }
+
         workitem = h["store"].load_workitem(task_id)
+        stage = workitem.current_stage
+
+        # Check if already decided
+        existing = h["store"].get_pending_gate_for_stage(task_id, stage)
+        if existing is not None:
+            return {
+                "ok": False,
+                "gate_id": existing.gate_id,
+                "gate_status": existing.decision.value if existing.decision else "pending",
+                "task_id": task_id,
+                "message": f"Gate at '{stage}' already has a decision: {existing.decision.value}",
+            }
+
         gate = Gate(
             task_id=task_id,
-            stage=workitem.current_stage,
-            gate_type="approval",
+            stage=stage,
+            gate_type=gate_name,
             decision=GateDecision.REJECTED,
             decision_by=actor,
             decision_note=notes,
@@ -379,19 +413,20 @@ def reject_gate_tool(input: dict) -> dict:
         h["journal"].append_raw(
             project_id=workitem.project_id,
             event_type="gate_rejected",
-            event_summary=f"Gate '{gate_name}' rejected for task '{task_id}'",
+            event_summary=f"Gate at '{stage}' rejected by '{actor}' — reason: {notes}",
             actor=actor,
             task_id=task_id,
-            related_stage=workitem.current_stage,
+            related_stage=stage,
         )
 
         return {
             "ok": True,
             "gate_id": gate.gate_id,
+            "gate_status": "rejected",
             "gate_type": gate.gate_type,
             "stage": gate.stage,
             "task_id": task_id,
-            "message": f"Gate rejected at stage '{gate.stage}'",
+            "message": f"Gate rejected at stage '{stage}'. Reason: {notes}",
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "message": f"Failed to reject gate: {e}"}
@@ -469,3 +504,80 @@ def list_tasks_tool(input: dict) -> dict:
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "message": f"Failed to list tasks: {e}"}
+
+
+def get_gate_panel_tool(input: dict) -> dict:
+    """
+    Get gate panel for a task — the PMO gate confirmation surface.
+
+    Shows: task identity, current stage, gate status, evidence summary,
+    and Alex's decision options (approve/reject).
+
+    Args:
+        input: {task_id: str}
+    Returns:
+        {ok: bool, task_id, task_title, current_stage, current_owner,
+         gate_status, gate_stage, gate_decision, gate_decision_by,
+         gate_decision_note, gate_decided_at, message}
+
+    gate_status values:
+        - "pending"   — no gate record yet, awaiting Alex decision
+        - "approved"  — already approved
+        - "rejected"  — already rejected
+        - "no_gate"   — current stage has no gate configured
+    """
+    try:
+        h = _harness
+        task_id = input["task_id"]
+
+        workitem = h["store"].load_workitem(task_id)
+        current_stage = workitem.current_stage
+
+        # Check if a gate decision exists for this task+stage
+        gate = h["store"].get_pending_gate_for_stage(task_id, current_stage)
+
+        if gate is None:
+            gate_status = "pending"
+            gate_decision = None
+            gate_decision_by = None
+            gate_decision_note = ""
+            gate_decided_at = None
+        else:
+            gate_decision = gate.decision.value if gate.decision else None
+            if gate_decision == "approved":
+                gate_status = "approved"
+            elif gate_decision == "rejected":
+                gate_status = "rejected"
+            else:
+                gate_status = "pending"
+            gate_decision_by = gate.decision_by
+            gate_decision_note = gate.decision_note
+            gate_decided_at = gate.decided_at.isoformat() if gate.decided_at else None
+
+        return {
+            "ok": True,
+            "task_id": task_id,
+            "task_title": workitem.task_title,
+            "current_stage": current_stage,
+            "current_owner": workitem.current_owner,
+            "gate_stage": current_stage,
+            "gate_type": "stage_advance",
+            "gate_status": gate_status,
+            "gate_decision": gate_decision,
+            "gate_decision_by": gate_decision_by,
+            "gate_decision_note": gate_decision_note,
+            "gate_decided_at": gate_decided_at,
+            "message": _gate_message(gate_status, current_stage),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "message": f"Failed to get gate panel: {e}"}
+
+
+def _gate_message(status: str, stage: str) -> str:
+    if status == "pending":
+        return f"Gate at '{stage}' is pending your decision."
+    elif status == "approved":
+        return f"Gate at '{stage}' was approved."
+    elif status == "rejected":
+        return f"Gate at '{stage}' was rejected."
+    return f"No gate configured for stage '{stage}'."

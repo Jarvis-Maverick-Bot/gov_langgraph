@@ -202,6 +202,41 @@ class StateStore:
                     pass
         return items
 
+    def list_all_gates(self) -> list[str]:
+        """List all gate IDs."""
+        return [p.stem.split("_", 1)[1] for p in self.state_dir.glob("gate_*.json")]
+
+    def list_gates_for_task(self, task_id: str) -> list[Gate]:
+        """List all gates for a given task_id, newest first."""
+        gates = []
+        for p in self.state_dir.glob("gate_*.json"):
+            gate_id = p.stem.split("_", 1)[1]
+            try:
+                gate = self.load_gate(gate_id)
+                if gate.task_id == task_id:
+                    gates.append(gate)
+            except Exception:
+                pass
+        # Sort newest first
+        gates.sort(key=lambda g: g.decided_at or datetime.min, reverse=True)
+        return gates
+
+    def get_pending_gate_for_stage(self, task_id: str, stage: str) -> Gate | None:
+        """Return the pending gate for a task+stage if no decision has been made yet.
+        
+        Logic: a gate is pending if no Gate record exists for this task+stage.
+        If a Gate record exists (approved or rejected), it is already decided.
+        """
+        for p in self.state_dir.glob("gate_*.json"):
+            gate_id = p.stem.split("_", 1)[1]
+            try:
+                gate = self.load_gate(gate_id)
+                if gate.task_id == task_id and gate.stage == stage:
+                    return gate  # exists = already decided
+            except Exception:
+                pass
+        return None  # no gate record = pending
+
 
 # ---------------------------------------------------------------------------
 # Dict → Object reconstruction
