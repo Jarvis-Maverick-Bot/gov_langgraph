@@ -22,6 +22,7 @@ from .state_store import StateStore
 from .checkpointer import Checkpointer, CheckpointRecord, CheckpointError, CheckpointNotFoundError
 from .evidence import EvidenceStore, EvidenceRecord, EvidenceType
 from .events import EventJournal
+from .invariants import InvariantError, validate_task_consistency
 
 __all__ = [
     # Config
@@ -40,4 +41,7 @@ __all__ = [
     "EvidenceType",
     # Event Journal
     "EventJournal",
+    # Invariants
+    "InvariantError",
+    "validate_task_consistency",
 ]
