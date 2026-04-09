@@ -171,6 +171,76 @@ def create_task_tool(input: dict) -> dict:
         return {"ok": False, "error": str(e), "message": f"Failed to create task: {e}"}
 
 
+# Default project ID for kickoff — all kickoff tasks go here unless configured otherwise
+DEFAULT_PROJECT_ID = "pmo-kickoff"
+
+
+def kickoff_task_tool(input: dict) -> dict:
+    """
+    Announce a new project kickoff — creates a workitem at INTAKE stage.
+
+    Product-shaped interface. Alex provides title, description, priority, and optional assignee.
+    Backend handles project assignment and stage setting automatically.
+
+    Args:
+        input: {
+            title: str (required) — task title,
+            description: str (required) — what this work is,
+            priority: int (required) — 0=P0, 1=P1, 2=P2, 3=P3,
+            assignee: str (optional) — initial owner, blank = unassigned,
+            actor: str (required) — who is kicking off,
+        }
+    Returns:
+        {ok: bool, task_id: str, task_title: str, current_stage: str, message: str}
+    """
+    try:
+        h = _harness
+
+        title = input["title"]
+        description = input.get("description", "")
+        priority = input.get("priority", 3)
+        assignee = input.get("assignee", "").strip() or "unassigned"
+        actor = input.get("actor", "unknown")
+
+        workitem = WorkItem(
+            task_title=title,
+            task_description=description,
+            project_id=DEFAULT_PROJECT_ID,
+            current_owner=assignee,
+            current_stage="INTAKE",
+            priority=priority,
+        )
+        h["store"].save_workitem(workitem)
+
+        task_state = TaskState(
+            task_id=workitem.task_id,
+            current_stage="INTAKE",
+            state_status=TaskStatus.BACKLOG,
+            current_owner=assignee,
+        )
+        h["store"].save_taskstate(task_state)
+
+        h["journal"].append_raw(
+            project_id=DEFAULT_PROJECT_ID,
+            event_type="task_kickoff",
+            event_summary=f"Kickoff announced: '{title}' — assigned to {assignee}",
+            actor=actor,
+            task_id=workitem.task_id,
+            related_stage="INTAKE",
+        )
+
+        return {
+            "ok": True,
+            "task_id": workitem.task_id,
+            "task_title": workitem.task_title,
+            "current_stage": "INTAKE",
+            "assignee": assignee,
+            "message": f"Kickoff announced: '{title}' entered pipeline at INTAKE, assigned to {assignee}.",
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "message": f"Failed to announce kickoff: {e}"}
+
+
 def advance_stage_tool(input: dict) -> dict:
     """
     Advance a task ONE stage at a time via StateMachine.

@@ -26,7 +26,7 @@ from gov_langgraph.openclaw_integration.tools import (
     get_gate_panel_tool,
     approve_gate_tool,
     reject_gate_tool,
-    create_task_tool,
+    kickoff_task_tool,
     list_tasks_tool,
 )
 
@@ -102,11 +102,11 @@ def gate_reject(body: dict):
 
 @app.post("/kickoff")
 def kickoff(body: dict):
-    required = ["task_title", "project_id", "current_owner", "current_stage", "actor"]
+    required = ["title", "description", "priority", "actor"]
     for field in required:
         if field not in body:
             raise HTTPException(status_code=422, detail=f"Missing field: {field}")
-    result = create_task_tool(body)
+    result = kickoff_task_tool(body)
     if not result.get("ok", False):
         raise HTTPException(status_code=400, detail=result.get("message", "Kickoff failed"))
     return result
