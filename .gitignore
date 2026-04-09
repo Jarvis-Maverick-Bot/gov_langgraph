@@ -4,3 +4,9 @@ __pycache__/
 .env
 .venv/
 *.egg-info/
+
+# PMO runtime artifacts
+_test_spawn.py
+_test_spawn2.py
+pmo_server.err
+pmo_server.log
