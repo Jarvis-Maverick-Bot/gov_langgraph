@@ -11,7 +11,7 @@
 PMO Smart Agent V1 is complete and frozen. All sprints accepted, all scope items delivered, all documentation finalized.
 
 **Freeze date:** 2026-04-09
-**Tag:** v1.0.0 (pending — to be applied after Nova final acceptance)
+**Tag:** v1.0.0 applied at eecd1f\ — Nova final acceptance 2026-04-09
 **Freeze commit:** `530b72f` (Sprint 4 — M5 complete, awaiting Nova final sign-off)
 **Repository:** github.com/Jarvis-Maverick-Bot/gov_langgraph
 
