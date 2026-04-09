@@ -269,8 +269,8 @@ pmo_web_ui/
 | M1 | Scaffold + Status View | ✅ COMPLETE | `eadc080` |
 | M2 | Gate Confirmation | ✅ ACCEPTED | `6bcec5d` + `2b8458a` |
 | M3 | Kickoff Announcement | ✅ ACCEPTED | `c026c49` |
-| M4 | Edge Cases + Integration | 🔲 | |
-| M5 | V1 Complete | 🔲 | |
+| M4 | Edge Cases + Integration | ✅ ACCEPTED | `530b72f` |
+| M5 | V1 Complete | ✅ COMPLETE | `efbcac9` |
 
 ---
 
