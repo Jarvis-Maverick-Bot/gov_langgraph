@@ -129,9 +129,15 @@ class MaverickSpawner:
         task_title: str,
         task_id: str,
         current_stage: str,
+        agent_cfg: AgentConfig | None = None,
     ) -> str:
-        """Build a structured rehydration context string for spawned agent."""
-        agent_cfg = self.get_agent(current_stage)
+        """Build a structured rehydration context string for spawned agent.
+
+        Args:
+            agent_cfg: Pre-resolved agent config from schedule(). Used to describe
+                       the role in the context string. Falls back to current_stage
+                       if not provided.
+        """
         role_desc = agent_cfg.role if agent_cfg else current_stage
 
         return (
@@ -198,6 +204,7 @@ class MaverickSpawner:
             task_title=task_title,
             task_id=task_id,
             current_stage=current_stage,
+            agent_cfg=agent_cfg,
         )
 
         return self._spawn(agent_cfg.agent_id, context)
