@@ -11,8 +11,9 @@ agents:
     agent_id: "viper"
     role: "Viper Delivery Agent"
     description: "Full-stack delivery: BA, SA, DEV, QA — role determined by task context"
-    # V1.5: single agent handles all stages via internal routing
-    # V2.0: separate agent entries when multi-agent spawn is needed
+    stages: ["BA", "SA", "DEV", "QA"]  # workflow stages this agent can handle
+
+  # V2.0: separate agent entries when multi-agent spawn is needed
 
   # PMO / scheduling agent
   maverick:

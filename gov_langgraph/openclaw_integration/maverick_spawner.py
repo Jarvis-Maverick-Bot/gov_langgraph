@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -36,8 +36,8 @@ class SpawnResult:
 class AgentConfig:
     agent_id: str
     role: str
-    stage: str
     description: str = ""
+    stages: list[str] = field(default_factory=list)  # workflow stages this agent handles
 
 
 class MaverickSpawner:
@@ -78,8 +78,8 @@ class MaverickSpawner:
             self._agents[role] = AgentConfig(
                 agent_id=cfg.get("agent_id", ""),
                 role=cfg.get("role", role),
-                stage=cfg.get("stage", ""),
                 description=cfg.get("description", ""),
+                stages=cfg.get("stages", []),
             )
 
         self._workflows = raw.get("workflows", {})
@@ -102,6 +102,17 @@ class MaverickSpawner:
     def get_agent(self, role: str) -> AgentConfig | None:
         """Return config for a specific role, or None if unknown."""
         return self.agents.get(role)
+
+    def _agent_for_stage(self, stage: str) -> AgentConfig | None:
+        """Find the registered agent that handles a given workflow stage.
+
+        Iterates agents and returns the first one whose `stages` list includes
+        the requested stage. Returns None if no agent covers this stage.
+        """
+        for role, cfg in self.agents.items():
+            if stage.upper() in [s.upper() for s in cfg.stages]:
+                return cfg
+        return None
 
     def list_workflows(self) -> list[str]:
         """Return all known workflow names from config."""
@@ -150,24 +161,35 @@ class MaverickSpawner:
             task_title: Title of the task
             task_id: UUID of the task
             current_stage: Current pipeline stage (BA, SA, DEV, QA)
-            role: Optional explicit role override. If None, uses current_stage as role key.
+            role: Optional explicit role override.
+                   If None, looks up which registered agent handles current_stage.
 
         Returns:
             SpawnResult with ok=True if spawned, ok=False with error if failed.
         """
         self._load_config()
 
-        # Resolve role — default to current_stage
-        if role is None:
-            role = current_stage.lower()
+        # Resolve: explicit role override, or find agent by current_stage
+        if role is not None:
+            agent_cfg = self.get_agent(role)
+        else:
+            agent_cfg = self._agent_for_stage(current_stage)
 
-        agent_cfg = self.get_agent(role)
         if agent_cfg is None:
+            known_stages = {
+                agent.role: cfg.stages
+                for agent, cfg in [
+                    (r, self.agents[r]) for r in self.list_roles()
+                ]
+            }
             return SpawnResult(
                 ok=False,
                 session_key=None,
                 status="no_agent",
-                error=f"Unknown role: '{role}'. Known roles: {self.list_roles()}",
+                error=(
+                    f"No agent registered for stage '{current_stage}'. "
+                    f"Known stage coverage: {known_stages}"
+                ),
             )
 
         context = self._build_context(
