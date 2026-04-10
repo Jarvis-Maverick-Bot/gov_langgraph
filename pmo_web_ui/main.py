@@ -79,6 +79,7 @@ def root():
 _ERROR_TYPE_STATUS = {
     "platform_unavailable": 503,
     "task_not_found": 404,
+    "project_not_found": 404,
     "validation_error": 422,
     "already_decided": 409,
     "terminal_state": 409,

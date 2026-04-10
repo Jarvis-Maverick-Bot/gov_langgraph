@@ -1143,12 +1143,22 @@ def get_advisories_tool(input: dict) -> dict:
         project_id = input["project_id"]
         project = h["store"].load_project(project_id)
 
-        advisories = []
-        for adv in project.advisories.values():
-            if input.get("acknowledged") is not None:
-                if adv.acknowledged != input["acknowledged"]:
-                    continue
-            advisories.append({
+        ack_filter = input.get("acknowledged")
+
+        # Use project helper for unfiltered case (returns newest-first)
+        if ack_filter is None:
+            active = project.get_active_advisories()
+        else:
+            # Apply filter + sort newest-first
+            all_advisories = sorted(
+                project.advisories.values(),
+                key=lambda a: a.created_at,
+                reverse=True,
+            )
+            active = [a for a in all_advisories if a.acknowledged == ack_filter]
+
+        advisories = [
+            {
                 "advisory_id": adv.advisory_id,
                 "advisory_type": adv.advisory_type.value,
                 "message": adv.message,
@@ -1158,7 +1168,9 @@ def get_advisories_tool(input: dict) -> dict:
                 "actor": adv.actor,
                 "acknowledged": adv.acknowledged,
                 "created_at": adv.created_at.isoformat(),
-            })
+            }
+            for adv in active
+        ]
 
         return {
             "ok": True,
