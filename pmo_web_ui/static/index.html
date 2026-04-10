@@ -2111,6 +2111,13 @@ function applyTranslations() {
     const content = contentEl ? contentEl.value.trim() : '';
     const producer = producerEl ? producerEl.value.trim() : '';
 
+    // Minimum content enforcement
+    if (content.length < 10) {
+      alert('Content must be at least 10 characters describing this prerequisite document.');
+      if (contentEl) contentEl.focus();
+      return;
+    }
+
     try {
       const d = await _api('POST', `/projects/${projectId}/prerequisites`, {
         artifact_type: artifactType,

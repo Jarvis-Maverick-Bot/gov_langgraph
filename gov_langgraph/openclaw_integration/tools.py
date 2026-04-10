@@ -198,6 +198,15 @@ def submit_prerequisite_tool(input: dict) -> dict:
                 "message": f"Unknown artifact type: {artifact_type}",
             }
 
+        # Require meaningful content (minimum 10 characters)
+        if not content_preview or len(content_preview.strip()) < 10:
+            return {
+                "ok": False,
+                "error": "content_too_short",
+                "message": f"Prerequisite content must be at least 10 characters. Got: '{content_preview}'",
+            }
+            }
+
         project.submit_prerequisite(artifact_type, content_preview, producer)
         h["store"].save_project(project)
 
