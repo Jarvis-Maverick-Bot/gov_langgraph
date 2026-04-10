@@ -1086,6 +1086,76 @@ function applyTranslations() {
     vertical-align: middle;
     margin-left: 0.5rem;
   }
+
+  /* ── PREREQUISITE CARDS ── */
+  .prereq-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: border-color 0.2s;
+  }
+  .prereq-card.submitted {
+    border-color: var(--green);
+    background: var(--bg-surface);
+  }
+  .prereq-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .prereq-icon { font-size: 1.25rem; }
+  .prereq-title { font-weight: 600; flex: 1; }
+  .prereq-status { font-size: 0.8rem; font-weight: 500; }
+  .prereq-status.submitted { color: var(--green); }
+  .prereq-status.pending { color: var(--text-dim); }
+  .prereq-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 0.25rem;
+  }
+  .prereq-preview {
+    font-size: 0.8rem;
+    color: var(--text-main);
+    background: var(--bg-deep);
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    margin-top: 0.4rem;
+    white-space: pre-wrap;
+    max-height: 3rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .prereq-form { display: flex; flex-direction: column; gap: 0.5rem; }
+  .prereq-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-main);
+    color: var(--text-main);
+  }
+  .prereq-producer-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .prereq-producer-row input {
+    flex: 1;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-main);
+    color: var(--text-main);
+  }
  }
   </style>
   <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
@@ -1308,7 +1378,7 @@ function applyTranslations() {
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- SURFACE: STRUCTURED INTAKE                                 -->
+    <!-- SURFACE: STRUCTURED INTAKE / PREREQUISITE PACKAGE         -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <div class="page" id="page-intake">
       <div class="surface-header">
@@ -1317,14 +1387,14 @@ function applyTranslations() {
           <span>›</span>
           <span>New Project</span>
         </div>
-        <div class="surface-title">New Project — Structured Intake</div>
-        <div class="surface-subtitle">Complete all required fields. Project creation is governed, not casual.</div>
+        <div class="surface-title">New Project — Structured Initialization</div>
+        <div class="surface-subtitle">Create the project first, then submit the prerequisite document package.</div>
       </div>
 
-      <!-- Required fields -->
-      <div class="intake-section">
+      <!-- ─── PHASE 1: PROJECT CREATION ─── -->
+      <div class="intake-section" id="int-phase1">
         <div class="intake-section-header">
-          <div class="intake-section-title required">Required Information</div>
+          <div class="intake-section-title required">Project Information</div>
         </div>
 
         <div class="form-row">
@@ -1347,8 +1417,8 @@ function applyTranslations() {
             <div class="field-state missing" id="int-goal-state">⚠ Required — not provided</div>
           </div>
           <div class="field narrow">
-            <label>Deliverable Type <span class="req-mark">*</span></label>
-            <select id="int-deliverable" onchange="intakeValidate()">
+            <label>Deliverable Type <span class="opt-mark">(metadata)</span></label>
+            <select id="int-deliverable-type" onchange="intakeValidate()">
               <option value="">— Select type —</option>
               <option value="scope">Scope</option>
               <option value="spec">Specification</option>
@@ -1357,57 +1427,59 @@ function applyTranslations() {
               <option value="testreport">Test Report</option>
               <option value="guideline">Guideline</option>
             </select>
-            <div class="field-state missing" id="int-deliverable-state">⚠ Required — not provided</div>
-          </div>
-          <div class="field wide">
-            <label>Deliverable Description <span class="req-mark">*</span></label>
-            <textarea id="int-deliverable-desc" rows="2" placeholder="What specifically will be delivered (e.g. Full system spec, Test plan with 50 cases)..." oninput="intakeValidate()"></textarea>
-            <div class="field-state missing" id="int-deliverable-desc-state">⚠ Required — not provided</div>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="field wide">
-            <label>Project Summary <span class="req-mark">*</span></label>
-            <textarea id="int-summary" rows="3" placeholder="Brief description of what this project produces and why it matters..." oninput="intakeValidate()"></textarea>
-            <div class="field-state missing" id="int-summary-state">⚠ Required — not provided</div>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="field wide">
-            <label>Business Context <span class="req-mark">*</span></label>
-            <textarea id="int-context" rows="2" placeholder="Background, constraints, dependencies, or references..."></textarea>
           </div>
         </div>
       </div>
 
-      <!-- Scope seed (optional) -->
-      <div class="intake-section">
-        <div class="intake-section-header">
-          <div class="intake-section-title">Scope Seed <span class="opt-mark">(optional)</span></div>
-        </div>
-        <div class="field">
-          <textarea id="int-scope-seed" rows="4" placeholder="Starting scope content, constraints, known requirements, or reference material..."></textarea>
-        </div>
-      </div>
-
-      <!-- Completeness progress -->
-      <div class="intake-progress">
-        <div class="intake-progress-label">Completeness</div>
+      <!-- Completeness progress (Phase 1) -->
+      <div class="intake-progress" id="int-phase1-progress">
+        <div class="intake-progress-label">Project Info</div>
         <div class="progress-bar intake-progress-bar">
-          <div class="progress-fill empty" id="int-progress-fill" style="width:0%"></div>
+          <div class="progress-fill empty" id="int-phase1-fill" style="width:0%"></div>
         </div>
-        <div class="intake-progress-count" id="int-progress-count">0 / 6 required fields</div>
+        <div class="intake-progress-count" id="int-phase1-count">0 / 3 required</div>
       </div>
 
       <!-- Actions -->
       <div class="intake-actions">
         <button class="secondary" onclick="intakeReset()">Clear</button>
-        <button class="success lg" id="int-submit-btn" disabled onclick="doIntakeCreate()">＋ Create Project</button>
+        <button class="success lg" id="int-create-btn" disabled onclick="doIntakeCreate()">＋ Create Project</button>
       </div>
 
       <div class="output" id="int-output">Fill in all required fields to create a project.</div>
+
+      <!-- ─── PHASE 2: PREREQUISITE PACKAGE (shown after creation) ─── -->
+      <div id="int-phase2" style="display:none">
+        <div class="surface-header" style="margin-top:2rem">
+          <div class="surface-title">Prerequisite Document Package</div>
+          <div class="surface-subtitle" id="int-proj-info"></div>
+        </div>
+
+        <!-- Prerequisite progress -->
+        <div class="intake-progress">
+          <div class="intake-progress-label">Prerequisites</div>
+          <div class="progress-bar intake-progress-bar">
+            <div class="progress-fill empty" id="int-prereq-fill" style="width:0%"></div>
+          </div>
+          <div class="intake-progress-count" id="int-prereq-count">0 / 6 submitted</div>
+        </div>
+
+        <!-- 6 prerequisite artifact cards -->
+        <div id="int-prereq-list"></div>
+
+        <!-- Proceed to Pre-Kickoff Review -->
+        <div id="int-proceed-section" style="display:none;margin-top:1.5rem;text-align:right">
+          <div class="card" style="border-color:var(--green);background:var(--green-bg)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-weight:600;color:var(--green)">✓ All 6 prerequisites submitted</div>
+                <div style="font-size:0.85rem;color:var(--text-dim);margin-top:0.25rem">Project is ready for pre-kickoff review.</div>
+              </div>
+              <button class="success lg" onclick="doProceedToReview()">Proceed to Pre-Kickoff Review →</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
@@ -1842,8 +1914,19 @@ function applyTranslations() {
   }
 
   /* ── INTAKE ── */
-  const INTAKE_FIELDS = ['int-name','int-owner','int-goal','int-summary','int-deliverable','int-context'];
-  const INTAKE_OPTIONAL = ['int-scope-seed'];
+  const INTAKE_FIELDS = ['int-name', 'int-owner', 'int-goal'];
+  let currentPrereqProjectId = null;
+
+  // Artifact type display names and icons
+  const ARTIFACT_META = {
+    scope:       { label: 'Scope',         icon: '📐', producer: 'Alex / BA' },
+    spec:        { label: 'Specification', icon: '📄', producer: 'BA Agent' },
+    arch:        { label: 'Architecture',  icon: '🏗️', producer: 'SA Agent' },
+    testcase:    { label: 'Test Case',     icon: '🧪', producer: 'QA Agent' },
+    testreport:  { label: 'Test Report',   icon: '📋', producer: 'QA Agent' },
+    guideline:   { label: 'Guideline',      icon: '📏', producer: 'Maverick' },
+  };
+  const ARTIFACT_ORDER = ['scope', 'spec', 'arch', 'testcase', 'testreport', 'guideline'];
 
   function intakeValidate() {
     const filled = INTAKE_FIELDS.filter(id => {
@@ -1853,11 +1936,12 @@ function applyTranslations() {
     const total = INTAKE_FIELDS.length;
     const pct = Math.round((filled.length / total) * 100);
 
-    const fill = document.getElementById('int-progress-fill');
-    fill.style.width = pct + '%';
-    fill.className = 'progress-fill ' + (pct === 100 ? 'ok' : pct > 0 ? 'partial' : 'empty');
-
-    document.getElementById('int-progress-count').textContent = `${filled.length} / ${total} required fields`;
+    const fill = document.getElementById('int-phase1-fill');
+    if (fill) {
+      fill.style.width = pct + '%';
+      fill.className = 'progress-fill ' + (pct === 100 ? 'ok' : pct > 0 ? 'partial' : 'empty');
+      document.getElementById('int-phase1-count').textContent = `${filled.length} / ${total} required`;
+    }
 
     // Field-level states
     INTAKE_FIELDS.forEach(id => {
@@ -1873,14 +1957,17 @@ function applyTranslations() {
       }
     });
 
-    document.getElementById('int-submit-btn').disabled = filled.length < total;
+    const btn = document.getElementById('int-create-btn');
+    if (btn) btn.disabled = filled.length < total;
   }
 
   function intakeReset() {
-    [...INTAKE_FIELDS, ...INTAKE_OPTIONAL].forEach(id => {
+    INTAKE_FIELDS.forEach(id => {
       const el = document.getElementById(id);
       if (el) { el.value = ''; if (el.tagName === 'SELECT') el.selectedIndex = 0; }
     });
+    const delType = document.getElementById('int-deliverable-type');
+    if (delType) delType.selectedIndex = 0;
     intakeValidate();
     document.getElementById('int-output').textContent = 'Form cleared.';
     document.getElementById('int-output').className = 'output';
@@ -1890,15 +1977,11 @@ function applyTranslations() {
     const name = document.getElementById('int-name').value.trim();
     const owner = document.getElementById('int-owner').value.trim();
     const goal = document.getElementById('int-goal').value.trim();
-    const summary = document.getElementById('int-summary').value.trim();
-    const deliverableType = document.getElementById('int-deliverable').value;
-    const deliverableDesc = document.getElementById('int-deliverable-desc').value.trim();
-    const context = document.getElementById('int-context').value.trim();
-    const scopeSeed = document.getElementById('int-scope-seed').value.trim();
+    const deliverableType = document.getElementById('int-deliverable-type').value;
     const out = document.getElementById('int-output');
 
-    if (!name || !owner || !goal || !summary || !deliverableDesc || !context) {
-      _warn(out, 'All required fields must be filled before creating a project.');
+    if (!name || !owner || !goal) {
+      _warn(out, 'Name, Owner, and Goal are required.');
       return;
     }
 
@@ -1908,23 +1991,145 @@ function applyTranslations() {
         project_name: name,
         project_owner: owner,
         project_goal: goal,
-        intake_summary: summary,
-        intake_deliverable: deliverableDesc,
-        intake_business_context: context,
-        scope_seed: scopeSeed,
-        project_status: 'active',
+        domain_type: 'internal',
+        intake_summary: '',
+        intake_deliverable: deliverableType || '',
+        intake_business_context: '',
+        actor: 'alex',
       });
       if (d.ok) {
-        _ok(out, `Project created: ${d.project_id}\n${d.message || ''}`);
+        currentPrereqProjectId = d.project_id;
+        _ok(out, `Project created: ${d.project_id}. Now submit the prerequisite package.`);
+
+        // Show project info
+        document.getElementById('int-proj-info').textContent =
+          `${name} · ${d.project_status} · Owner: ${owner}`;
+
+        // Show Phase 2
+        document.getElementById('int-phase2').style.display = 'block';
+        document.getElementById('int-phase1-progress').style.display = 'none';
+        document.getElementById('int-create-btn').disabled = true;
+        document.getElementById('int-create-btn').textContent = '✓ Project Created';
+
+        // Load and render prerequisite package
+        await loadPrereqPackage(d.project_id);
+
+        // Sync global project list
         await loadGlobalProjects();
-        // Navigate to workspace with new project
         document.getElementById('global-project-select').value = d.project_id;
-        loadWorkspaceData();
-        navigateTo('workspace');
       } else {
         _err(out, d.message || 'Failed to create project.');
       }
     } catch(e) { _err(out, e.message); }
+  }
+
+  async function loadPrereqPackage(projectId) {
+    const list = document.getElementById('int-prereq-list');
+    list.innerHTML = '<div class="empty-state" style="padding:1rem">Loading prerequisite package…</div>';
+    try {
+      const d = await _api('GET', `/projects/${projectId}/prerequisites`);
+      if (!d.ok) { list.innerHTML = '<div class="empty-state">Failed to load prerequisites.</div>'; return; }
+      renderPrereqPackage(d);
+    } catch(e) {
+      list.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
+    }
+  }
+
+  function renderPrereqPackage(d) {
+    const list = document.getElementById('int-prereq-list');
+    const submitted = d.prerequisite_submitted || 0;
+    const total = 6;
+    const pct = Math.round((submitted / total) * 100);
+
+    // Update progress
+    const fill = document.getElementById('int-prereq-fill');
+    fill.style.width = pct + '%';
+    fill.className = 'progress-fill ' + (pct === 100 ? 'ok' : pct > 0 ? 'partial' : 'empty');
+    document.getElementById('int-prereq-count').textContent = `${submitted} / ${total} submitted`;
+
+    // Render cards
+    list.innerHTML = ARTIFACT_ORDER.map(at => {
+      const meta = ARTIFACT_META[at];
+      const pa = d.artifacts && d.artifacts[at] ? d.artifacts[at] : null;
+      return renderPrereqCard(at, meta, pa || { submitted: false });
+    }).join('');
+
+    // Show proceed button when all 6 are submitted
+    const proceedSection = document.getElementById('int-proceed-section');
+    if (d.prerequisite_complete) {
+      proceedSection.style.display = 'block';
+    } else {
+      proceedSection.style.display = 'none';
+    }
+  }
+
+  function renderPrereqCard(at, meta, pa) {
+    const statusClass = pa.submitted ? 'submitted' : 'pending';
+    const statusIcon = pa.submitted ? '✓' : '○';
+    const statusLabel = pa.submitted ? 'Submitted' : 'Pending';
+    const submittedAt = pa.submitted_at ? new Date(pa.submitted_at).toLocaleString() : '';
+
+    if (pa.submitted) {
+      return `
+      <div class="card prereq-card ${statusClass}" id="prereq-card-${at}">
+        <div class="prereq-card-header">
+          <div class="prereq-icon">${meta.icon}</div>
+          <div class="prereq-title">${meta.label}</div>
+          <div class="prereq-status submitted">✓ Submitted</div>
+        </div>
+        <div class="prereq-meta">
+          <span>Producer: ${_esc(pa.producer || meta.producer)}</span>
+          ${submittedAt ? `<span>${submittedAt}</span>` : ''}
+        </div>
+        ${pa.content_preview ? `<div class="prereq-preview">${_esc(pa.content_preview)}</div>` : ''}
+      </div>`;
+    } else {
+      return `
+      <div class="card prereq-card pending" id="prereq-card-${at}">
+        <div class="prereq-card-header">
+          <div class="prereq-icon">${meta.icon}</div>
+          <div class="prereq-title">${meta.label}</div>
+          <div class="prereq-status pending">○ Pending</div>
+        </div>
+        <div class="prereq-form">
+          <textarea id="prereq-content-${at}" rows="2" placeholder="Brief description or summary of this ${meta.label.toLowerCase()}…"></textarea>
+          <div class="prereq-producer-row">
+            <input id="prereq-producer-${at}" type="text" placeholder="Producer (e.g. ${meta.producer})" value="${meta.producer}" />
+            <button class="primary sm" onclick="submitPrereq('${at}')">Submit</button>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
+  async function submitPrereq(artifactType) {
+    const projectId = currentPrereqProjectId;
+    if (!projectId) return;
+
+    const contentEl = document.getElementById(`prereq-content-${artifactType}`);
+    const producerEl = document.getElementById(`prereq-producer-${artifactType}`);
+    const content = contentEl ? contentEl.value.trim() : '';
+    const producer = producerEl ? producerEl.value.trim() : '';
+
+    try {
+      const d = await _api('POST', `/projects/${projectId}/prerequisites`, {
+        artifact_type: artifactType,
+        content_preview: content,
+        producer: producer,
+        actor: 'alex',
+      });
+      if (d.ok) {
+        // Re-render the package
+        await loadPrereqPackage(projectId);
+      } else {
+        alert('Failed to submit: ' + (d.message || d.error));
+      }
+    } catch(e) { alert('Error: ' + e.message); }
+  }
+
+  function doProceedToReview() {
+    // Placeholder: Sprint 2R will wire up pre-kickoff review surface
+    alert('Pre-kickoff review surface is Sprint 2R work. Project is ready for review.');
   }
 
   /* ── DELIVERABLES BROWSER ── */

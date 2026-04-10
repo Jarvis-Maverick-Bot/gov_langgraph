@@ -185,6 +185,10 @@ def submit_prerequisite_tool(input: dict) -> dict:
 
         project = h["store"].load_project(project_id)
 
+        # V1.5 migration: initialize prerequisite_artifacts if empty
+        if not project.prerequisite_artifacts:
+            project.initialize_prerequisites()
+
         # Validate artifact_type
         valid_types = [at.value for at in ArtifactType.all()]
         if artifact_type not in valid_types:
@@ -241,6 +245,11 @@ def get_prerequisite_package_tool(input: dict) -> dict:
         project_id = input["project_id"]
 
         project = h["store"].load_project(project_id)
+
+        # V1.5 migration: initialize prerequisite_artifacts if empty
+        if not project.prerequisite_artifacts:
+            project.initialize_prerequisites()
+            h["store"].save_project(project)
 
         submitted_count = sum(
             1 for pa in project.prerequisite_artifacts.values() if pa.submitted
