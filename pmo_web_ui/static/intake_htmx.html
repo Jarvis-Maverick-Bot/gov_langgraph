@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>htmx + Alpine.js Intake Spike</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0a0e1a; color: #e0e8f0; margin: 2rem; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 1.5rem; max-width: 700px; }
+    .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .field { flex: 1; }
+    .field.narrow { flex: 0 0 200px; }
+    label { display: block; font-size: 0.875rem; color: #9ca3af; margin-bottom: 0.25rem; }
+    input, select, textarea { width: 100%; background: #1f2937; border: 1px solid #374151; border-radius: 4px; color: #e0e8f0; padding: 0.5rem; box-sizing: border-box; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; }
+    .req-mark { color: #f59e0b; }
+    .progress-bar { background: #1f2937; border-radius: 4px; height: 8px; overflow: hidden; margin: 0.5rem 0; }
+    .progress-fill { height: 100%; transition: width 0.3s, background 0.3s; }
+    .progress-fill.empty { background: #374151; }
+    .progress-fill.partial { background: #f59e0b; }
+    .progress-fill.ok { background: #10b981; }
+    .btn { padding: 0.5rem 1rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 500; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:disabled { background: #1f2937; color: #6b7280; cursor: not-allowed; }
+    .field-state { font-size: 0.75rem; margin-top: 0.25rem; }
+    .field-state.missing { color: #f59e0b; }
+    .field-state.filled { color: #10b981; }
+    .output { margin-top: 1rem; padding: 0.75rem; border-radius: 4px; font-size: 0.875rem; }
+    .output.error { background: #7f1d1d; color: #fca5a5; }
+    .output.ok { background: #064e3b; color: #6ee7b7; }
+    .htmx-indicator { opacity: 0; transition: opacity 0.3s; }
+    .htmx-request .htmx-indicator { opacity: 1; }
+    .htmx-request.htmx-indicator { opacity: 1; }
+    .i18n-demo { background: #1e3a5f; border: 1px solid #3b82f6; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; }
+    .i18n-demo button { background: #3b82f6; color: white; border: none; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; }
+  </style>
+  <!-- htmx + Alpine.js — no build step -->
+  <script defer src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body>
+
+<h2 style="color:#e0e8f0">htmx + Alpine.js Intake Spike</h2>
+<p style="color:#9ca3af">This prototype demonstrates declarative reactive i18n + form handling.</p>
+
+<div class="i18n-demo">
+  <strong>i18n demo:</strong>
+  <button @click="setLang('en')">EN</button>
+  <button @click="setLang('zh')">ZH</button>
+  — Nav label: <span x-text="t('nav_intake')">New Project</span>
+</div>
+
+<!--
+  KEY PATTERN 1: Alpine.js i18n
+  ================================
+  Instead of: element.textContent = T[lang][key]
+  We write:    x-text="t('nav_intake')"
+
+  When lang changes, Alpine.js automatically re-evaluates ALL x-text bindings.
+  No manual applyTranslations() call needed. No DOM manipulation.
+  The entire UI updates reactively when language changes.
+
+  KEY PATTERN 2: Reactive validation
+  ===================================
+  Instead of: manual DOM updates in validate(), classList.add/remove
+  We write:    :class="fieldState('name')"  (computed property)
+
+  Alpine.js tracks dependencies and only updates what changed.
+
+  KEY PATTERN 3: htmx form submission
+  ==================================
+  htmx intercepts form submit, POSTs via AJAX, swaps server HTML response.
+  No fetch() call. No manual error handling.
+  Server returns HTML fragment → htmx swaps it into the target.
+-->
+
+<div x-data="intakeSpike()">
+  <div class="card">
+    <h3 style="margin-top:0" x-text="t('intake_title')">New Project — Structured Intake</h3>
+
+    <!-- htmx: form POSTs to /intake/create, server returns HTML fragment -->
+    <form
+      hx-post="/intake/create"
+      hx-swap="outerHTML"
+      hx-target="#intake-card"
+      hx-indicator="#loader">
+
+      <div class="form-row">
+        <div class="field">
+          <label x-text="t('int_name')">Project Name</label> <span class="req-mark">*</span>
+          <input type="text" x-model="fields.name" @blur="touch('name')" :class="fieldCls('name')" />
+          <div class="field-state" :class="fieldCls('name')" x-text="fieldLabel('name')"></div>
+        </div>
+        <div class="field narrow">
+          <label x-text="t('int_owner')">Owner</label> <span class="req-mark">*</span>
+          <input type="text" x-model="fields.owner" @blur="touch('owner')" :class="fieldCls('owner')" />
+          <div class="field-state" :class="fieldCls('owner')" x-text="fieldLabel('owner')"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label x-text="t('int_goal')">Goal</label> <span class="req-mark">*</span>
+          <input type="text" x-model="fields.goal" @blur="touch('goal')" :class="fieldCls('goal')" />
+          <div class="field-state" :class="fieldCls('goal')" x-text="fieldLabel('goal')"></div>
+        </div>
+        <div class="field narrow">
+          <label x-text="t('int_deliv')">Deliverable</label> <span class="req-mark">*</span>
+          <select x-model="fields.deliverable" @change="touch('deliverable')" :class="fieldCls('deliverable')">
+            <option value="" x-text="t('select')">— Select —</option>
+            <option value="scope" x-text="t('type_scope')">Scope</option>
+            <option value="spec" x-text="t('type_spec')">Spec</option>
+            <option value="arch" x-text="t('type_arch')">Arch</option>
+          </select>
+          <div class="field-state" :class="fieldCls('deliverable')" x-text="fieldLabel('deliverable')"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label x-text="t('int_summary')">Summary</label> <span class="req-mark">*</span>
+          <textarea x-model="fields.summary" @blur="touch('summary')" :class="fieldCls('summary')" rows="2"></textarea>
+          <div class="field-state" :class="fieldCls('summary')" x-text="fieldLabel('summary')"></div>
+        </div>
+        <div class="field">
+          <label x-text="t('int_context')">Business Context</label> <span class="req-mark">*</span>
+          <textarea x-model="fields.context" @blur="touch('context')" :class="fieldCls('context')" rows="2"></textarea>
+          <div class="field-state" :class="fieldCls('context')" x-text="fieldLabel('context')"></div>
+        </div>
+      </div>
+
+      <!-- Reactive progress — NO manual width update, computed property -->
+      <div x-text="filledCount + ' / 6 ' + t('required')">0 / 6 required</div>
+      <div class="progress-bar">
+        <div class="progress-fill" :class="progressClass" :style="'width:'+progressPct+'%'"></div>
+      </div>
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:center">
+        <button type="submit" class="btn btn-success" :disabled="!allFilled" x-text="t('btn_create')">+ Create Project</button>
+        <span id="loader" class="htmx-indicator" x-text="t('creating')">Creating...</span>
+      </div>
+
+      <div class="output" :class="outputCls" x-show="msg" x-text="msg"></div>
+    </form>
+  </div>
+
+  <!-- Comparison section -->
+  <div class="card" style="margin-top:1rem; background:#1a2332">
+    <h4>Why this is better:</h4>
+    <pre style="color:#9ca3af; font-size:0.8rem; line-height:1.6">
+<b style="color:#10b981">// BEFORE (vanilla JS)</b>
+function intakeValidate() {
+  const filled = INTAKE_FIELDS.filter(id => {
+    const el = document.getElementById(id);
+    return el && el.value.trim() !== '';
+  });
+  // Manual DOM updates — easy to miss one, hard to maintain
+  const fill = document.getElementById('int-progress-fill');
+  fill.style.width = pct + '%';
+  fill.className = 'progress-fill ' + (pct === 100 ? 'ok' : ...);
+  document.getElementById('int-progress-count').textContent = ...;
+  INTAKE_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    const state = document.getElementById(id + '-state');
+    if (el.value.trim()) {
+      state.className = 'field-state filled';
+      state.textContent = '✓ Filled';  // ← hardcoded, can't i18n
+    } else {
+      state.className = 'field-state missing';
+      state.textContent = '⚠ Required'; // ← hardcoded, can't i18n
+    }
+  });
+  document.getElementById('int-submit-btn').disabled = filled.length < total;
+}
+
+// i18n — manual, error-prone
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = T[lang][key] || key;  // ← easy to miss elements
+  });
+}
+// Every time language changes: must call applyTranslations() again
+// Every time form changes: must call intakeValidate() again
+// Result: bugs accumulate in the seams between functions
+
+<b style="color:#3b82f6">// AFTER (Alpine.js + htmx)</b>
+<div x-data="intakeSpike()">  // ← ONE declarative component
+  <input x-model="fields.name" @blur="touch('name')" :class="fieldCls('name')" />
+  // Reactive: class updates automatically when fields.name changes
+  // i18n: fieldLabel('name') returns t('required') or t('filled') — no manual call
+
+  get progressClass() {
+    if (this.progressPct === 100) return 'progress-fill ok';
+    if (this.progressPct > 0) return 'progress-fill partial';
+    return 'progress-fill empty';
+  }
+  // ← computed property — Alpine tracks dependencies, only re-evaluates what's needed
+
+  // htmx handles form submission — no fetch() call
+  // Server returns HTML → htmx swaps into target → no JS callback needed
+  <form hx-post="/intake/create" hx-swap="outerHTML" hx-target="#intake-card">
+
+  // i18n: when lang changes, ALL x-text bindings re-evaluate automatically
+  // No applyTranslations() function. No missed elements. No seams.
+  <span x-text="t('nav_intake')">New Project</span>
+</pre>
+  </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('intakeSpike', () => ({
+    lang: localStorage.getItem('pmo_lang') || 'en',
+
+    // Translations — loaded from server or inline
+    T: {
+      en: {
+        nav_intake: 'New Project',
+        intake_title: 'New Project — Structured Intake',
+        int_name: 'Project Name',
+        int_owner: 'Owner',
+        int_goal: 'Goal',
+        int_deliv: 'Deliverable Type',
+        int_summary: 'Summary',
+        int_context: 'Business Context',
+        select: '— Select —',
+        type_scope: 'Scope', type_spec: 'Spec', type_arch: 'Arch',
+        required: 'required fields',
+        btn_create: '+ Create Project',
+        creating: 'Creating...',
+        filled: '✓ Filled',
+        not_filled: '⚠ Required',
+      },
+      zh: {
+        nav_intake: '新建项目',
+        intake_title: '新建项目 — 结构化 intake',
+        int_name: '项目名称',
+        int_owner: '负责人',
+        int_goal: '项目目标',
+        int_deliv: '交付类型',
+        int_summary: '摘要',
+        int_context: '业务背景',
+        select: '— 选择 —',
+        type_scope: '范围', type_spec: '规格', type_arch: '架构',
+        required: '必填字段',
+        btn_create: '+ 创建项目',
+        creating: '创建中...',
+        filled: '✓ 已填写',
+        not_filled: '⚠ 必填',
+      }
+    },
+
+    fields: { name: '', owner: '', goal: '', deliverable: '', summary: '', context: '' },
+    touched: {},
+    msg: '',
+    outputCls: 'output',
+
+    init() {
+      // On language change, Alpine automatically re-renders ALL x-text bindings
+      // No applyTranslations() call needed. Declarative i18n just works.
+    },
+
+    setLang(lang) {
+      this.lang = lang;
+      localStorage.setItem('pmo_lang', lang);
+      // That's it — Alpine.js reactively updates every x-text in the DOM
+      // No manual DOM traversal, no missed elements, no stale state
+    },
+
+    t(key) { return this.T[this.lang]?.[key] || this.T['en']?.[key] || key; },
+
+    touch(field) { this.touched[field] = true; },
+
+    fieldCls(field) {
+      if (!this.touched[field]) return '';
+      return this.fields[field]?.trim() ? 'filled' : 'missing';
+    },
+
+    fieldLabel(field) {
+      if (!this.touched[field]) return this.t('not_filled');
+      return this.fields[field]?.trim() ? this.t('filled') : this.t('not_filled');
+    },
+
+    get filledCount() {
+      return ['name','owner','goal','deliverable','summary','context']
+        .filter(f => this.fields[f]?.trim()).length;
+    },
+    get progressPct() { return Math.round((this.filledCount / 6) * 100); },
+    get progressClass() {
+      if (this.progressPct === 100) return 'ok';
+      if (this.progressPct > 0) return 'partial';
+      return 'empty';
+    },
+    get allFilled() { return this.filledCount === 6; }
+  }));
+});
+
+// htmx response handling
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  if (e.detail.target.id === 'intake-card') {
+    const alpine = Alpine.$data;
+    if (alpine?.handleSuccess) alpine.handleSuccess();
+  }
+});
+</script>
+
+</body>
+</html>
