@@ -45,6 +45,8 @@ from gov_langgraph.openclaw_integration.tools import (
     resolve_blocker_tool,
     validate_intake_tool,
     complete_intake_tool,
+    submit_prerequisite_tool,
+    get_prerequisite_package_tool,
 )
 
 PORT = int(os.getenv("PMO_PORT", "8000"))
@@ -214,6 +216,38 @@ def list_projects(status: str | None = None):
 def get_project(project_id: str):
     """Get details of a specific project."""
     result = get_project_tool({"project_id": project_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.get("/projects/{project_id}/prerequisites")
+def get_prerequisites(project_id: str):
+    """Get the prerequisite package state for a project (6 artifacts, submitted or pending)."""
+    result = get_prerequisite_package_tool({"project_id": project_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/prerequisites")
+def submit_prerequisite(project_id: str, body: dict):
+    """
+    Submit one prerequisite artifact.
+
+    Required: artifact_type (scope|spec|arch|testcase|testreport|guideline)
+    Optional: content_preview, producer, actor
+    """
+    required = ["artifact_type"]
+    for field in required:
+        if field not in body:
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing field: {field}"},
+                status_code=422,
+            )
+    body["project_id"] = project_id
+    result = submit_prerequisite_tool(body)
     if not result.get("ok", False):
         return _tool_error(result)
     return result

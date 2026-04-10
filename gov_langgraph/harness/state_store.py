@@ -260,10 +260,22 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 def _dict_to_project(data: dict) -> Project:
     from gov_langgraph.platform_model import (
-        Artifact, ArtifactType, AcceptancePackage,
+        Artifact, ArtifactType, AcceptancePackage, PrereqArtifact,
         AdvisorySignal, AdvisoryType,
         Blocker, BlockerSeverity,
     )
+
+    # Reconstruct prerequisite artifacts
+    prerequisite_artifacts: dict[str, PrereqArtifact] = {}
+    for at_str, pa_data in data.get("prerequisite_artifacts", {}).items():
+        at = ArtifactType(pa_data["artifact_type"])
+        prerequisite_artifacts[at_str] = PrereqArtifact(
+            artifact_type=at,
+            submitted=pa_data.get("submitted", False),
+            content_preview=pa_data.get("content_preview", ""),
+            producer=pa_data.get("producer", ""),
+            submitted_at=_parse_datetime(pa_data.get("submitted_at")),
+        )
 
     # Reconstruct artifacts dict
     artifacts: dict[str, Artifact] = {}
@@ -356,6 +368,9 @@ def _dict_to_project(data: dict) -> Project:
         intake_deliverable=data.get("intake_deliverable", ""),
         intake_business_context=data.get("intake_business_context", ""),
         output_package=data.get("output_package", {}),
+        # V1.6 prerequisite package
+        prerequisite_artifacts=prerequisite_artifacts,
+        prerequisite_submitted_at=_parse_datetime(data.get("prerequisite_submitted_at")),
     )
 
 

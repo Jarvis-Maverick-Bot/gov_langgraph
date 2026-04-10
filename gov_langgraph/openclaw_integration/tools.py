@@ -19,7 +19,7 @@ from typing import Any, Optional
 from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal
 from gov_langgraph.platform_model import (
     Project, WorkItem, TaskState, Workflow,
-    Role, TaskStatus, Handoff, Gate, GateDecision, Event,
+    Role, TaskStatus, ProjectStatus, Handoff, Gate, GateDecision, Event,
     Artifact, ArtifactType, AcceptancePackage,
     AdvisorySignal, AdvisoryType,
     Blocker, BlockerSeverity,
@@ -96,49 +96,50 @@ def _sm() -> StateMachine:
 
 def create_project_tool(input: dict) -> dict:
     """
-    Create a new project.
+    Create a new project in DRAFT state with prerequisite package initialized.
 
-    V1.6: Accepts structured intake fields at creation.
+    V1.6: Project starts in DRAFT state. Prerequisite package (6 artifacts)
+    is initialized but empty. Project auto-transitions:
+      DRAFT -> INTAKE_SUBMITTED (first artifact submitted)
+      INTAKE_SUBMITTED -> PRE_KICKOFF_REVIEW (all 6 submitted)
+
     Required: project_name, project_goal, project_owner
-    Required intake fields (at creation): intake_summary, intake_deliverable, intake_business_context
-    Note: intake_complete is auto-set to True if all intake fields are present and non-empty
-    (intake_complete is set automatically if all required intake fields are present)
+    Optional: intake_summary, intake_deliverable, intake_business_context,
+              domain_type, actor
 
     Args:
         input: {
-            project_name: str, project_goal: str, domain_type: str, project_owner: str,
+            project_name: str, project_goal: str, project_owner: str,
             intake_summary: str, intake_deliverable: str, intake_business_context: str,
-            actor: str,
+            domain_type: str, actor: str,
         }
     Returns:
-        {ok: bool, project_id: str, message: str, intake_complete: bool}
+        {ok: bool, project_id: str, message: str, project_status: str,
+         prerequisite_submitted: int}  # 0/6 initially
     """
     try:
         h = _harness
-        intake_summary = input.get("intake_summary", "")
-        intake_deliverable = input.get("intake_deliverable", "")
-        intake_business_context = input.get("intake_business_context", "")
 
         project = Project(
             project_name=input["project_name"],
             project_goal=input.get("project_goal", ""),
             domain_type=input.get("domain_type", "internal"),
             project_owner=input.get("project_owner", ""),
-            intake_summary=intake_summary,
-            intake_deliverable=intake_deliverable,
-            intake_business_context=intake_business_context,
+            project_status=ProjectStatus.DRAFT,  # V1.6: start in DRAFT
+            intake_summary=input.get("intake_summary", ""),
+            intake_deliverable=input.get("intake_deliverable", ""),
+            intake_business_context=input.get("intake_business_context", ""),
         )
 
-        # Auto-mark intake complete if all required fields are present
-        if project.validate_intake():
-            project.complete_intake()
+        # V1.6: Initialize empty prerequisite package
+        project.initialize_prerequisites()
 
         h["store"].save_project(project)
 
         h["journal"].append_raw(
             project_id=project.project_id,
             event_type="project_created",
-            event_summary=f"Project '{project.project_name}' created",
+            event_summary=f"Project '{project.project_name}' created in DRAFT",
             actor=input.get("actor", "unknown"),
         )
 
@@ -146,11 +147,121 @@ def create_project_tool(input: dict) -> dict:
             "ok": True,
             "project_id": project.project_id,
             "project_name": project.project_name,
-            "intake_complete": project.intake_complete,
-            "message": f"Project '{project.project_name}' created",
+            "project_status": project.project_status.value,
+            "prerequisite_submitted": 0,  # 0/6 initially
+            "prerequisite_complete": False,
+            "message": f"Project '{project.project_name}' created in DRAFT with 0/6 prerequisites",
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "message": f"Failed to create project: {e}"}
+
+
+def submit_prerequisite_tool(input: dict) -> dict:
+    """
+    Submit one prerequisite artifact to a project's prerequisite package.
+
+    V1.6: Projects start in DRAFT. Submitting artifacts transitions:
+      DRAFT -> INTAKE_SUBMITTED (first artifact)
+      INTAKE_SUBMITTED -> PRE_KICKOFF_REVIEW (all 6)
+
+    Args:
+        input: {
+            project_id: str,
+            artifact_type: str,  # scope, spec, arch, testcase, testreport, guideline
+            content_preview: str,  # short description of the artifact
+            producer: str,  # who produced it (Alex, BA, SA, QA, etc.)
+            actor: str,
+        }
+    Returns:
+        {ok: bool, project_status: str, prerequisite_submitted: int,
+         prerequisite_complete: bool, message: str}
+    """
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        artifact_type = input["artifact_type"]
+        content_preview = input.get("content_preview", "")
+        producer = input.get("producer", "")
+
+        project = h["store"].load_project(project_id)
+
+        # Validate artifact_type
+        valid_types = [at.value for at in ArtifactType.all()]
+        if artifact_type not in valid_types:
+            return {
+                "ok": False,
+                "error": f"Invalid artifact_type. Must be one of: {valid_types}",
+                "message": f"Unknown artifact type: {artifact_type}",
+            }
+
+        project.submit_prerequisite(artifact_type, content_preview, producer)
+        h["store"].save_project(project)
+
+        submitted_count = sum(
+            1 for pa in project.prerequisite_artifacts.values() if pa.submitted
+        )
+
+        h["journal"].append_raw(
+            project_id=project_id,
+            event_type="prerequisite_submitted",
+            event_summary=f"Prerequisite '{artifact_type}' submitted for project",
+            actor=input.get("actor", "unknown"),
+        )
+
+        return {
+            "ok": True,
+            "project_status": project.project_status.value,
+            "prerequisite_submitted": submitted_count,
+            "prerequisite_complete": project.is_prerequisite_complete(),
+            "prerequisite_submitted_at": (
+                project.prerequisite_submitted_at.isoformat()
+                if project.prerequisite_submitted_at else None
+            ),
+            "message": f"Prerequisite '{artifact_type}' submitted ({submitted_count}/6)",
+        }
+    except ObjectNotFoundError:
+        return {"ok": False, "error": f"Project not found: {project_id}", "message": f"Project not found: {project_id}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "message": f"Failed to submit prerequisite: {e}"}
+
+
+def get_prerequisite_package_tool(input: dict) -> dict:
+    """
+    Get the full prerequisite package state for a project.
+
+    Args:
+        input: {project_id: str}
+    Returns:
+        {ok: bool, project_id: str, project_status: str,
+         prerequisite_submitted: int, prerequisite_complete: bool,
+         prerequisite_submitted_at: str|None, artifacts: dict}
+    """
+    try:
+        h = _harness
+        project_id = input["project_id"]
+
+        project = h["store"].load_project(project_id)
+
+        submitted_count = sum(
+            1 for pa in project.prerequisite_artifacts.values() if pa.submitted
+        )
+
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "project_status": project.project_status.value,
+            "prerequisite_submitted": submitted_count,
+            "prerequisite_complete": project.is_prerequisite_complete(),
+            "prerequisite_submitted_at": (
+                project.prerequisite_submitted_at.isoformat()
+                if project.prerequisite_submitted_at else None
+            ),
+            "artifacts": project.get_prerequisite_package(),
+        }
+    except ObjectNotFoundError:
+        return {"ok": False, "error": f"Project not found: {project_id}", "message": f"Project not found: {project_id}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "message": f"Failed to get prerequisite package: {e}"}
 
 
 def create_task_tool(input: dict) -> dict:

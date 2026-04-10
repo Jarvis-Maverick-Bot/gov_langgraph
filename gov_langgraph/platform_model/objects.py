@@ -23,7 +23,14 @@ from typing import Optional
 
 
 class ProjectStatus(str, Enum):
-    ACTIVE = "active"
+    # V1.6 lifecycle states
+    DRAFT = "draft"  # project created, no prerequisites tracked yet
+    INTAKE_SUBMITTED = "intake_submitted"  # prerequisites tracked, not all submitted
+    PRE_KICKOFF_REVIEW = "pre_kickoff_review"  # all 6 artifacts submitted, awaiting review
+    KICKOFF_READY = "kickoff_ready"  # review complete, Maverick recommends kickoff
+    REVIEW_REJECTED = "review_rejected"  # review failed, revisions needed
+    # V1.5 retained states
+    ACTIVE = "active"  # execution in progress
     ON_HOLD = "on_hold"
     CLOSED = "closed"
     SHUTDOWN = "shutdown"
@@ -129,7 +136,71 @@ class Project:
     # V1.6: Output package — added at acceptance/closure
     output_package: dict = field(default_factory=dict)
 
-    # --- Intake helpers ---
+    # V1.6: Prerequisite package — artifact_type -> PrereqArtifact
+    # Initialized empty at project creation (DRAFT state)
+    prerequisite_artifacts: dict[str, PrereqArtifact] = field(default_factory=dict)
+    # Timestamp when all 6 prerequisite artifacts were submitted
+    prerequisite_submitted_at: Optional[datetime] = None
+
+    # --- Prerequisite package helpers ---
+
+    def initialize_prerequisites(self) -> None:
+        """
+        Initialize all 6 prerequisite artifacts in NOT submitted state.
+        Called when project is created.
+        """
+        self.prerequisite_artifacts = {}
+        for at in ArtifactType.all():
+            self.prerequisite_artifacts[at.value] = PrereqArtifact(artifact_type=at)
+
+    def submit_prerequisite(
+        self,
+        artifact_type: str,
+        content_preview: str = "",
+        producer: str = "",
+    ) -> None:
+        """
+        Mark one prerequisite artifact as submitted.
+        Updates project_status: DRAFT -> INTAKE_SUBMITTED -> PRE_KICKOFF_REVIEW
+        """
+        if artifact_type not in self.prerequisite_artifacts:
+            raise ValueError(f"Unknown artifact type: {artifact_type}")
+
+        pa = self.prerequisite_artifacts[artifact_type]
+        pa.submitted = True
+        pa.content_preview = content_preview
+        pa.producer = producer
+        pa.submitted_at = datetime.utcnow()
+
+        # Auto-transition status based on submission count
+        submitted_count = sum(1 for p in self.prerequisite_artifacts.values() if p.submitted)
+        if submitted_count == 1:
+            self.project_status = ProjectStatus.INTAKE_SUBMITTED
+        if submitted_count == 6:
+            self.project_status = ProjectStatus.PRE_KICKOFF_REVIEW
+            self.prerequisite_submitted_at = datetime.utcnow()
+
+    def get_prerequisite_package(self) -> dict:
+        """
+        Return all 6 prerequisite artifacts with their submission state.
+        """
+        return {
+            at.value: {
+                "artifact_type": pa.artifact_type.value,
+                "submitted": pa.submitted,
+                "content_preview": pa.content_preview,
+                "producer": pa.producer,
+                "submitted_at": pa.submitted_at.isoformat() if pa.submitted_at else None,
+            }
+            for at, pa in (
+                (ArtifactType(at_str), self.prerequisite_artifacts[at_str])
+                for at_str in self.prerequisite_artifacts
+            )
+        }
+
+    def is_prerequisite_complete(self) -> bool:
+        """Return True if all 6 prerequisite artifacts are submitted."""
+        return all(pa.submitted for pa in self.prerequisite_artifacts.values())
 
     def validate_intake(self) -> bool:
         """
@@ -488,6 +559,19 @@ class ArtifactType(str, Enum):
             "testreport": "After QA",
             "guideline": "On Completion",
         }[self.value]
+
+
+@dataclass
+class PrereqArtifact:
+    """
+    Tracks a single prerequisite artifact's submission state.
+    Used during the V1.6 intake/pre-kickoff phase.
+    """
+    artifact_type: ArtifactType
+    submitted: bool = False
+    content_preview: str = ""
+    producer: str = ""
+    submitted_at: Optional[datetime] = None
 
 
 @dataclass
