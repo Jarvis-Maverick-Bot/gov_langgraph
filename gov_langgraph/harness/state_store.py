@@ -259,7 +259,11 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 
 def _dict_to_project(data: dict) -> Project:
-    from gov_langgraph.platform_model import Artifact, ArtifactType, AcceptancePackage  # local to avoid circular
+    from gov_langgraph.platform_model import (
+        Artifact, ArtifactType, AcceptancePackage,
+        AdvisorySignal, AdvisoryType,
+        Blocker, BlockerSeverity,
+    )
 
     # Reconstruct artifacts dict
     artifacts: dict[str, Artifact] = {}
@@ -278,7 +282,6 @@ def _dict_to_project(data: dict) -> Project:
     acceptance_package: AcceptancePackage | None = None
     pkg_data = data.get("acceptance_package")
     if pkg_data:
-        # Reconstruct artifacts
         pkg_artifacts: dict[ArtifactType, Artifact] = {}
         for at_str, art_data in pkg_data.get("artifacts", {}).items():
             at = ArtifactType(at_str)
@@ -302,6 +305,36 @@ def _dict_to_project(data: dict) -> Project:
             created_at=_parse_datetime(pkg_data.get("created_at")) or datetime.utcnow(),
         )
 
+    # Reconstruct advisories
+    advisories: dict[str, AdvisorySignal] = {}
+    for adv_id, adv_data in data.get("advisories", {}).items():
+        advisories[adv_id] = AdvisorySignal(
+            advisory_id=adv_data.get("advisory_id", adv_id),
+            advisory_type=AdvisoryType(adv_data["advisory_type"]),
+            project_id=adv_data["project_id"],
+            message=adv_data.get("message", ""),
+            severity=adv_data.get("severity", "info"),
+            task_id=adv_data.get("task_id"),
+            stage=adv_data.get("stage"),
+            actor=adv_data.get("actor", "maverick"),
+            created_at=_parse_datetime(adv_data.get("created_at")) or datetime.utcnow(),
+            acknowledged=adv_data.get("acknowledged", False),
+        )
+
+    # Reconstruct blockers
+    blockers: dict[str, Blocker] = {}
+    for blk_id, blk_data in data.get("blockers", {}).items():
+        blockers[blk_id] = Blocker(
+            blocker_id=blk_data.get("blocker_id", blk_id),
+            task_id=blk_data["task_id"],
+            project_id=blk_data["project_id"],
+            reason=blk_data.get("reason", ""),
+            severity=BlockerSeverity(blk_data.get("severity", "medium")),
+            detected_at=_parse_datetime(blk_data.get("detected_at")) or datetime.utcnow(),
+            resolved_at=_parse_datetime(blk_data.get("resolved_at")),
+            resolved_by=blk_data.get("resolved_by"),
+        )
+
     return Project(
         project_id=data["project_id"],
         project_name=data["project_name"],
@@ -315,6 +348,8 @@ def _dict_to_project(data: dict) -> Project:
         closed_at=_parse_datetime(data.get("closed_at")),
         artifacts=artifacts,
         acceptance_package=acceptance_package,
+        advisories=advisories,
+        blockers=blockers,
     )
 
 

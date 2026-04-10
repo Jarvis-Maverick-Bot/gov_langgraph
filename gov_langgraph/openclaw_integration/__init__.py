@@ -21,6 +21,12 @@ from .tools import (
     get_acceptance_package_tool,
     approve_acceptance_tool,
     reject_acceptance_tool,
+    get_advisories_tool,
+    raise_advisory_tool,
+    acknowledge_advisory_tool,
+    get_blockers_tool,
+    raise_blocker_tool,
+    resolve_blocker_tool,
 )
 from .coordinator import Coordinator
 
@@ -40,5 +46,11 @@ __all__ = [
     "get_acceptance_package_tool",
     "approve_acceptance_tool",
     "reject_acceptance_tool",
+    "get_advisories_tool",
+    "raise_advisory_tool",
+    "acknowledge_advisory_tool",
+    "get_blockers_tool",
+    "raise_blocker_tool",
+    "resolve_blocker_tool",
     "Coordinator",
 ]

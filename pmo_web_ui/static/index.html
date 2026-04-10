@@ -303,6 +303,19 @@
     <div class="output" id="list-output">Response will appear here…</div>
   </div>
 
+  <!-- ── ADVISORIES & BLOCKERS ── -->
+  <div class="section">
+    <div class="section-title">Advisories &amp; Blockers</div>
+    <div class="form-row">
+      <select id="adv-project" style="flex:2">
+        <option value="">(select a project…)</option>
+      </select>
+      <button onclick="loadAdvProjects();loadAdvisories()" style="max-width:80px">Refresh</button>
+      <button onclick="loadAdvisories()">Load</button>
+    </div>
+    <div id="advisory-blocker-panel" style="display:none"></div>
+  </div>
+
 <script>
   const BASE = '';
   let _projects = [];  // cached project list
@@ -876,6 +889,123 @@
 
   // Load detail project list on page start
   loadDetailProjects();
+
+  // ── Advisories & Blockers ──
+  async function loadAdvProjects() {
+    const sel = document.getElementById('adv-project');
+    if (!sel) return;
+    try {
+      const r = await fetch(BASE + '/projects');
+      const d = await r.json();
+      if (!d.ok) return;
+      sel.innerHTML = '<option value="">(select a project…)</option>';
+      (d.projects || []).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.project_id;
+        opt.textContent = `${p.project_name} (${p.project_status})`;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  async function loadAdvisories() {
+    const projectId = document.getElementById('adv-project').value.trim();
+    if (!projectId) { alert('Select a project first'); return; }
+    const panel = document.getElementById('advisory-blocker-panel');
+    panel.style.display = 'block';
+    panel.innerHTML = '<div style="font-size:0.8rem;color:#64748b">Loading…</div>';
+
+    try {
+      const [advRes, blkRes] = await Promise.all([
+        fetch(BASE + '/projects/' + encodeURIComponent(projectId) + '/advisories'),
+        fetch(BASE + '/projects/' + encodeURIComponent(projectId) + '/blockers'),
+      ]);
+      const advs = await advRes.json();
+      const blks = await blkRes.json();
+
+      let html = '';
+
+      // Blockers section
+      const blockers = blks.blockers || [];
+      if (blockers.length > 0) {
+        html += `<div style="margin-bottom:1rem">
+          <div style="font-size:0.85rem;font-weight:600;color:#ef4444;margin-bottom:0.5rem">⚠ Blockers (${blockers.length})</div>`;
+        blockers.forEach(b => {
+          const sevColor = b.severity === 'critical' ? '#ef4444' : b.severity === 'high' ? '#f97316' : '#f59e0b';
+          html += `<div style="background:#0f172a;border:1px solid ${sevColor}40;border-radius:4px;padding:0.6rem;margin-bottom:0.4rem">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:0.8rem;font-weight:600;color:#ef4444">${_esc(b.reason)}</span>
+              <span style="font-size:0.7rem;padding:2px 6px;border-radius:3px;background:${sevColor}20;color:${sevColor}">${b.severity}</span>
+            </div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:0.2rem">
+              Task: ${_esc(b.task_id)} · ${b.age_hours}h old · Detected: ${new Date(b.detected_at).toLocaleString()}
+            </div>
+            <button onclick="doResolveBlocker('${projectId}','${b.blocker_id}')" style="margin-top:0.4rem;background:#475569;font-size:0.7rem;padding:3px 8px">Resolve</button>
+          </div>`;
+        });
+        html += '</div>';
+      }
+
+      // Advisories section
+      const advisories = advs.advisories || [];
+      if (advisories.length > 0) {
+        html += `<div>
+          <div style="font-size:0.85rem;font-weight:600;color:#94a3b8;margin-bottom:0.5rem">📋 Advisories (${advisories.length})</div>`;
+        advisories.forEach(a => {
+          const sevIcon = a.severity === 'critical' ? '🔴' : a.severity === 'warn' ? '⚠️' : 'ℹ️';
+          const sevColor = a.severity === 'critical' ? '#ef4444' : a.severity === 'warn' ? '#f59e0b' : '#3b82f6';
+          html += `<div style="background:#0f172a;border:1px solid ${sevColor}40;border-radius:4px;padding:0.6rem;margin-bottom:0.4rem">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:0.8rem;color:${sevColor}">${sevIcon} [${a.advisory_type}] ${_esc(a.message)}</span>
+              <span style="font-size:0.65rem;color:#64748b">${new Date(a.created_at).toLocaleTimeString()}</span>
+            </div>
+            <div style="font-size:0.7rem;color:#475569;margin-top:0.2rem">
+              ${a.task_id ? 'Task: ' + _esc(a.task_id) + ' · ' : ''}Stage: ${a.stage || '—'} · From: ${a.actor}
+            </div>
+            <button onclick="doAckAdvisory('${projectId}','${a.advisory_id}')" style="margin-top:0.4rem;background:#1e293b;border:1px solid #334155;font-size:0.7rem;padding:3px 8px;color:#94a3b8">Dismiss</button>
+          </div>`;
+        });
+        html += '</div>';
+      }
+
+      if (!html) {
+        html = '<div style="font-size:0.8rem;color:#64748b;text-align:center;padding:1rem">No active advisories or blockers.</div>';
+      }
+
+      panel.innerHTML = html;
+    } catch(e) {
+      panel.innerHTML = renderErrorStr('platform_unavailable', 'Cannot reach PMO backend.');
+    }
+  }
+
+  async function doResolveBlocker(projectId, blockerId) {
+    const actor = prompt('Your name:');
+    if (!actor) return;
+    try {
+      const r = await fetch(BASE + '/projects/' + encodeURIComponent(projectId) + '/blockers/' + blockerId + '/resolve', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({resolved_by: actor}),
+      });
+      const d = await r.json();
+      if (d.ok) await loadAdvisories();
+      else alert(d.message || 'Failed');
+    } catch(e) { alert(e.message); }
+  }
+
+  async function doAckAdvisory(projectId, advisoryId) {
+    try {
+      const r = await fetch(BASE + '/projects/' + encodeURIComponent(projectId) + '/advisories/' + advisoryId + '/acknowledge', {
+        method: 'POST',
+      });
+      const d = await r.json();
+      if (d.ok) await loadAdvisories();
+      else alert(d.message || 'Failed');
+    } catch(e) { alert(e.message); }
+  }
+
+  // Load advisory project list on page start
+  loadAdvProjects();
 </script>
 </body>
 </html>

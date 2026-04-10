@@ -32,8 +32,12 @@ from .exceptions import (
 # ---------------------------------------------------------------------------
 from .objects import (
     AcceptancePackage,
+    AdvisorySignal,
+    AdvisoryType,
     Artifact,
     ArtifactType,
+    Blocker,
+    BlockerSeverity,
     Event,
     Gate,
     GateDecision,
@@ -110,6 +114,10 @@ __all__ = [
     "Artifact",
     "ArtifactType",
     "AcceptancePackage",
+    "AdvisorySignal",
+    "AdvisoryType",
+    "Blocker",
+    "BlockerSeverity",
     # Enums
     "Role",
     "Tier",

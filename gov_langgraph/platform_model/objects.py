@@ -114,6 +114,10 @@ class Project:
     artifacts: dict[str, Artifact] = field(default_factory=dict)
     # V1.5: latest acceptance package for this project
     acceptance_package: Optional[AcceptancePackage] = None
+    # V1.5: advisory signals — advisory_id -> AdvisorySignal
+    advisories: dict[str, AdvisorySignal] = field(default_factory=dict)
+    # V1.5: blockers — blocker_id -> Blocker
+    blockers: dict[str, Blocker] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.project_name:
@@ -157,6 +161,44 @@ class Project:
         return [
             at for at in ArtifactType.all()
             if at not in type_map or type_map[at].is_empty()
+        ]
+
+    # --- Advisory helpers ---
+
+    def add_advisory(self, advisory: AdvisorySignal) -> None:
+        """Add an advisory signal to this project."""
+        self.advisories[advisory.advisory_id] = advisory
+
+    def get_active_advisories(self) -> list[AdvisorySignal]:
+        """Return unacknowledged advisory signals, newest first."""
+        return sorted(
+            [a for a in self.advisories.values() if not a.acknowledged],
+            key=lambda a: a.created_at,
+            reverse=True,
+        )
+
+    def get_advisories_by_type(self, advisory_type: AdvisoryType) -> list[AdvisorySignal]:
+        """Return all advisories of a given type."""
+        return [
+            a for a in self.advisories.values()
+            if a.advisory_type == advisory_type and not a.acknowledged
+        ]
+
+    # --- Blocker helpers ---
+
+    def add_blocker(self, blocker: Blocker) -> None:
+        """Add a blocker to this project."""
+        self.blockers[blocker.blocker_id] = blocker
+
+    def get_active_blockers(self) -> list[Blocker]:
+        """Return unresolved blockers."""
+        return [b for b in self.blockers.values() if not b.is_resolved()]
+
+    def get_blockers_for_task(self, task_id: str) -> list[Blocker]:
+        """Return unresolved blockers for a specific task."""
+        return [
+            b for b in self.blockers.values()
+            if b.task_id == task_id and not b.is_resolved()
         ]
 
 
@@ -474,9 +516,91 @@ class AcceptancePackage:
 
 
 # ---------------------------------------------------------------------------
-# Event
+# Advisory Signal (Sprint 4)
 # ---------------------------------------------------------------------------
 
+
+class AdvisoryType(str, Enum):
+    """Advisory signal types — informational only, non-blocking."""
+
+    RISK = "risk"
+    SCHEDULE = "schedule"
+    STAGE = "stage"
+    SUMMARY = "summary"
+    BLOCKER = "blocker"
+
+    @classmethod
+    def all(cls) -> list["AdvisoryType"]:
+        return [cls.RISK, cls.SCHEDULE, cls.STAGE, cls.SUMMARY, cls.BLOCKER]
+
+
+@dataclass
+class AdvisorySignal:
+    """
+    Non-blocking advisory signal surfaced from Maverick's coordination.
+    Advisory signals are informational only — they inform humans but do not
+    halt or alter pipeline state.
+    """
+
+    advisory_type: AdvisoryType
+    project_id: str
+    message: str
+    severity: str = "info"
+    task_id: Optional[str] = None
+    stage: Optional[str] = None
+    actor: str = "maverick"
+    advisory_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    acknowledged: bool = False
+
+    def ack(self) -> None:
+        self.acknowledged = True
+
+
+# ---------------------------------------------------------------------------
+# Blocker (Sprint 4)
+# ---------------------------------------------------------------------------
+
+
+class BlockerSeverity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class Blocker:
+    """
+    Explicit blocker record for a task — surfaced by Maverick.
+    Blockers are detected conditions, not governance decisions.
+    They do not change task state — they surface it for human review.
+    """
+
+    task_id: str
+    project_id: str
+    reason: str
+    blocker_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    severity: BlockerSeverity = BlockerSeverity.MEDIUM
+    detected_at: datetime = field(default_factory=datetime.utcnow)
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+
+    def resolve(self, resolved_by: str) -> None:
+        self.resolved_at = datetime.utcnow()
+        self.resolved_by = resolved_by
+
+    def is_resolved(self) -> bool:
+        return self.resolved_at is not None
+
+    def age_hours(self) -> float:
+        delta = datetime.utcnow() - self.detected_at
+        return delta.total_seconds() / 3600
+
+
+# ---------------------------------------------------------------------------
+# Event
+# ---------------------------------------------------------------------------
 
 
 @dataclass

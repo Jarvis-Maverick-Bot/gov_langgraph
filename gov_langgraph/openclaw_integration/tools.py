@@ -21,6 +21,8 @@ from gov_langgraph.platform_model import (
     Project, WorkItem, TaskState, Workflow,
     Role, TaskStatus, Handoff, Gate, GateDecision, Event,
     Artifact, ArtifactType, AcceptancePackage,
+    AdvisorySignal, AdvisoryType,
+    Blocker, BlockerSeverity,
     get_v1_pipeline_workflow,
 )
 from gov_langgraph.platform_model.state_machine import StateMachine
@@ -1121,6 +1123,267 @@ def reject_acceptance_tool(input: dict) -> dict:
         return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
     except Exception as e:
         return _error_response("unknown", f"Failed to reject acceptance: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Advisory tools (Sprint 4)
+# ---------------------------------------------------------------------------
+
+def get_advisories_tool(input: dict) -> dict:
+    """
+    Get active advisory signals for a project.
+
+    Args:
+        input: {project_id: str, acknowledged: bool | None}
+    Returns:
+        {ok: bool, advisories: list[dict]}
+    """
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        project = h["store"].load_project(project_id)
+
+        advisories = []
+        for adv in project.advisories.values():
+            if input.get("acknowledged") is not None:
+                if adv.acknowledged != input["acknowledged"]:
+                    continue
+            advisories.append({
+                "advisory_id": adv.advisory_id,
+                "advisory_type": adv.advisory_type.value,
+                "message": adv.message,
+                "severity": adv.severity,
+                "task_id": adv.task_id,
+                "stage": adv.stage,
+                "actor": adv.actor,
+                "acknowledged": adv.acknowledged,
+                "created_at": adv.created_at.isoformat(),
+            })
+
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "advisories": advisories,
+            "count": len(advisories),
+        }
+    except ObjectNotFoundError:
+        return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
+    except Exception as e:
+        return _error_response("unknown", f"Failed to get advisories: {e}")
+
+
+def raise_advisory_tool(input: dict) -> dict:
+    """
+    Raise an advisory signal for a project (used by Maverick or PMO).
+
+    Args:
+        input: {
+            project_id: str,
+            advisory_type: str,  # risk|schedule|stage|summary|blocker
+            message: str,
+            severity: str,  # info|warn|critical
+            task_id: str | None,
+            stage: str | None,
+            actor: str,
+        }
+    Returns:
+        {ok: bool, advisory_id: str}
+    """
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        project = h["store"].load_project(project_id)
+
+        try:
+            advisory_type = AdvisoryType(input["advisory_type"])
+        except ValueError:
+            return _error_response("validation_error", f"Invalid advisory_type: {input['advisory_type']}")
+
+        advisory = AdvisorySignal(
+            advisory_type=advisory_type,
+            project_id=project_id,
+            message=input.get("message", ""),
+            severity=input.get("severity", "info"),
+            task_id=input.get("task_id"),
+            stage=input.get("stage"),
+            actor=input.get("actor", "maverick"),
+        )
+        project.add_advisory(advisory)
+        h["store"].save_project(project)
+
+        h["journal"].append_raw(
+            project_id=project_id,
+            event_type="advisory_raised",
+            event_summary=f"Advisory [{advisory_type.value}]: {advisory.message[:80]}",
+            actor=input.get("actor", "maverick"),
+        )
+
+        return {
+            "ok": True,
+            "advisory_id": advisory.advisory_id,
+            "advisory_type": advisory_type.value,
+            "message": f"Advisory raised: {advisory_type.value}",
+        }
+    except ObjectNotFoundError:
+        return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
+    except Exception as e:
+        return _error_response("unknown", f"Failed to raise advisory: {e}")
+
+
+def acknowledge_advisory_tool(input: dict) -> dict:
+    """Acknowledge/dismiss an advisory signal."""
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        advisory_id = input["advisory_id"]
+        project = h["store"].load_project(project_id)
+
+        if advisory_id not in project.advisories:
+            return _error_response("validation_error", f"Advisory '{advisory_id}' not found")
+
+        project.advisories[advisory_id].ack()
+        h["store"].save_project(project)
+
+        return {"ok": True, "message": f"Advisory {advisory_id} acknowledged"}
+    except ObjectNotFoundError:
+        return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
+    except Exception as e:
+        return _error_response("unknown", f"Failed to acknowledge advisory: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Blocker tools (Sprint 4)
+# ---------------------------------------------------------------------------
+
+def get_blockers_tool(input: dict) -> dict:
+    """Get active blockers for a project or task."""
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        task_id = input.get("task_id")
+        project = h["store"].load_project(project_id)
+
+        blockers = []
+        for blk in project.blockers.values():
+            if blk.is_resolved():
+                continue
+            if task_id and blk.task_id != task_id:
+                continue
+            blockers.append({
+                "blocker_id": blk.blocker_id,
+                "task_id": blk.task_id,
+                "reason": blk.reason,
+                "severity": blk.severity.value,
+                "age_hours": round(blk.age_hours(), 1),
+                "detected_at": blk.detected_at.isoformat(),
+                "resolved": False,
+            })
+
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "blockers": blockers,
+            "count": len(blockers),
+        }
+    except ObjectNotFoundError:
+        return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
+    except Exception as e:
+        return _error_response("unknown", f"Failed to get blockers: {e}")
+
+
+def raise_blocker_tool(input: dict) -> dict:
+    """
+    Raise a blocker for a task.
+
+    Args:
+        input: {project_id, task_id, reason, severity: str}
+    Returns:
+        {ok: bool, blocker_id: str}
+    """
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        task_id = input["task_id"]
+        reason = input.get("reason", "")
+        severity_str = input.get("severity", "medium")
+
+        try:
+            severity = BlockerSeverity(severity_str)
+        except ValueError:
+            severity = BlockerSeverity.MEDIUM
+
+        project = h["store"].load_project(project_id)
+
+        blocker = Blocker(
+            task_id=task_id,
+            project_id=project_id,
+            reason=reason,
+            severity=severity,
+        )
+        project.add_blocker(blocker)
+        h["store"].save_project(project)
+
+        # Also raise a RISK advisory automatically
+        advisory = AdvisorySignal(
+            advisory_type=AdvisoryType.BLOCKER,
+            project_id=project_id,
+            message=f"Blocker on task {task_id}: {reason[:100]}",
+            severity="warn" if severity != BlockerSeverity.CRITICAL else "critical",
+            task_id=task_id,
+            actor="maverick",
+        )
+        project.add_advisory(advisory)
+        h["store"].save_project(project)
+
+        h["journal"].append_raw(
+            project_id=project_id,
+            event_type="blocker_raised",
+            event_summary=f"Blocker on task {task_id}: {reason[:80]}",
+            actor=input.get("actor", "maverick"),
+        )
+
+        return {
+            "ok": True,
+            "blocker_id": blocker.blocker_id,
+            "advisory_id": advisory.advisory_id,
+            "message": f"Blocker raised for task {task_id}",
+        }
+    except ObjectNotFoundError:
+        return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
+    except Exception as e:
+        return _error_response("unknown", f"Failed to raise blocker: {e}")
+
+
+def resolve_blocker_tool(input: dict) -> dict:
+    """Resolve/dismiss a blocker."""
+    try:
+        h = _harness
+        project_id = input["project_id"]
+        blocker_id = input["blocker_id"]
+        resolved_by = input.get("resolved_by", "")
+
+        project = h["store"].load_project(project_id)
+        if blocker_id not in project.blockers:
+            return _error_response("validation_error", f"Blocker '{blocker_id}' not found")
+
+        project.blockers[blocker_id].resolve(resolved_by=resolved_by)
+        h["store"].save_project(project)
+
+        h["journal"].append_raw(
+            project_id=project_id,
+            event_type="blocker_resolved",
+            event_summary=f"Blocker {blocker_id} resolved by {resolved_by}",
+            actor=resolved_by,
+        )
+
+        return {
+            "ok": True,
+            "message": f"Blocker {blocker_id} resolved by {resolved_by}",
+        }
+    except ObjectNotFoundError:
+        return _error_response("project_not_found", f"Project '{input.get('project_id')}' not found")
+    except Exception as e:
+        return _error_response("unknown", f"Failed to resolve blocker: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -37,6 +37,12 @@ from gov_langgraph.openclaw_integration.tools import (
     get_acceptance_package_tool,
     approve_acceptance_tool,
     reject_acceptance_tool,
+    get_advisories_tool,
+    raise_advisory_tool,
+    acknowledge_advisory_tool,
+    get_blockers_tool,
+    raise_blocker_tool,
+    resolve_blocker_tool,
 )
 
 PORT = int(os.getenv("PMO_PORT", "8000"))
@@ -289,6 +295,72 @@ def reject_acceptance(project_id: str, body: dict):
             )
     body["project_id"] = project_id
     result = reject_acceptance_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Advisory endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/projects/{project_id}/advisories")
+def get_advisories(project_id: str):
+    """Get active advisory signals for a project."""
+    result = get_advisories_tool({"project_id": project_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/advisories")
+def raise_advisory(project_id: str, body: dict):
+    """Raise an advisory signal for a project."""
+    body["project_id"] = project_id
+    result = raise_advisory_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/advisories/{advisory_id}/acknowledge")
+def acknowledge_advisory(project_id: str, advisory_id: str):
+    """Acknowledge/dismiss an advisory signal."""
+    result = acknowledge_advisory_tool({"project_id": project_id, "advisory_id": advisory_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Blocker endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/projects/{project_id}/blockers")
+def get_blockers(project_id: str, task_id: str | None = None):
+    """Get active blockers for a project (optionally filtered by task)."""
+    result = get_blockers_tool({"project_id": project_id, "task_id": task_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/blockers")
+def raise_blocker(project_id: str, body: dict):
+    """Raise a blocker for a task."""
+    body["project_id"] = project_id
+    result = raise_blocker_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/blockers/{blocker_id}/resolve")
+def resolve_blocker(project_id: str, blocker_id: str, body: dict):
+    """Resolve/dismiss a blocker."""
+    body["project_id"] = project_id
+    body["blocker_id"] = blocker_id
+    result = resolve_blocker_tool(body)
     if not result.get("ok", False):
         return _tool_error(result)
     return result
