@@ -2,8 +2,9 @@
 from gov_langgraph.openclaw_integration import (
     init_harness, create_project_tool, kickoff_task_tool, list_tasks_tool,
     submit_handoff_tool, upsert_artifact_tool, get_gate_panel_tool,
-    create_acceptance_package_tool, approve_acceptance_tool,
-    get_project_tool, create_acceptance_package_tool, reject_acceptance_tool,
+    create_acceptance_package_tool, get_acceptance_package_tool,
+    approve_acceptance_tool, reject_acceptance_tool,
+    get_project_tool,
 )
 from gov_langgraph.openclaw_integration.tools import get_advisories_tool, raise_advisory_tool
 
@@ -84,8 +85,9 @@ def test_happy_path():
     assert r['ok'], f"GUIDELINE failed: {r}"
     print("13b. GUIDELINE artifact: OK")
 
-    # 14. Gate panel
-    r = get_gate_panel_tool({'project_id': pid})
+    # 14. Gate panel (requires task_id)
+    r = get_gate_panel_tool({'project_id': pid, 'task_id': tid})
+    assert r['ok'], f"Gate panel failed: {r}"
     print(f"14. Gate: gate_status={r.get('gate_status')} stage={r.get('current_stage')}")
 
     # 15. Create acceptance package
@@ -148,15 +150,19 @@ def test_rejection_path(pid, tid):
 
     # Re-create acceptance (task already done, create fresh)
     r = create_acceptance_package_tool({'project_id': pid, 'task_id': tid, 'verification_notes': 'Review', 'actor': 'alex'})
-    print(f"1. Acceptance package: {r['ok']} complete={r.get('is_complete')}")
+    assert r['ok'], f"Acceptance package failed: {r}"
+    print(f"1. Acceptance package: OK complete={r.get('is_complete')}")
 
     r = reject_acceptance_tool({'project_id': pid, 'actor': 'alex', 'reason': 'Test rejection — needs revision'})
     assert r['ok'], f"Reject failed: {r}"
     print(f"2. Reject: OK msg={r.get('message')}")
 
-    r = get_project_tool({'project_id': pid})
+    # Verify rejection via get_acceptance_package_tool (correct surface)
+    r = get_acceptance_package_tool({'project_id': pid})
+    assert r['ok'], f"Get acceptance package failed: {r}"
     pkg = r.get('acceptance_package', {})
-    print(f"3. Rejection recorded: decision={pkg.get('acceptance_decision')} note={pkg.get('decision_note', '')[:40]}")
+    assert pkg.get('acceptance_decision') == 'rejected', f"Expected rejected, got {pkg.get('acceptance_decision')}"
+    print(f"3. Rejection verified: decision={pkg.get('acceptance_decision')}")
 
     print("\n=== REJECTION PATH: PASSED ===")
 
