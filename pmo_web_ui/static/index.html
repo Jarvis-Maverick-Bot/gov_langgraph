@@ -2790,9 +2790,8 @@ function applyTranslations() {
     var pid = btn.dataset.pid;
     var reviewer = btn.dataset.reviewer;
     var action = btn.dataset.action;
-    if (action === 'approve') doRecordOutcome(pid, reviewer, 'approved');
-    else if (action === 'revision') doRecordOutcome(pid, reviewer, 'revision_needed');
-    else if (action === 'request') doRecordOutcome(pid, reviewer, 'request');
+    if (action === 'approve' || action === 'revision' || action === 'request') { doRecordOutcome(pid, reviewer, action); }
+    else if (action === 'recommend_kickoff' || action === 'recommend_revision') { doRecommendKickoff(pid, action); }
   });
 
   async function doLoadReview() {
@@ -2840,12 +2839,11 @@ function applyTranslations() {
 
   function renderReviewerActions(pid, reviewer, s) {
     if (s.status !== 'pending') return '';
-    var pidEsc = encodeURIComponent(pid);
     if (!s.requested_at) {
-      return '<button class="primary sm" style="margin-top:0.5rem" onclick="doRecordOutcome(''+pidEsc+'',''+reviewer+'','+'request'+')">Request</button>';
+      return '<button class="primary sm" style="margin-top:0.5rem" data-pid="' + pid + '" data-reviewer="' + reviewer + '" data-action="request">Request</button>';
     }
-    return '<button class="success sm" style="margin-top:0.5rem" onclick="doRecordOutcome(''+pidEsc+'',''+reviewer+'','+'approved'+')">Approve</button>' +
-      '<button class="danger sm" style="margin-top:0.25rem" onclick="doRecordOutcome(''+pidEsc+'',''+reviewer+'','+'revision_needed'+')">Revision</button>';
+    return '<button class="success sm" style="margin-top:0.5rem" data-pid="' + pid + '" data-reviewer="' + reviewer + '" data-action="approve">Approve</button>' +
+      '<button class="danger sm" style="margin-top:0.25rem" data-pid="' + pid + '" data-reviewer="' + reviewer + '" data-action="revision">Revision</button>';
   }
 
   function renderMaverickStatus(mav) {
@@ -2865,10 +2863,10 @@ function applyTranslations() {
     if (mav.status !== 'pending') return '';
     if (canRec) {
       return '<div class="form-row" style="margin-top:0.5rem"><div class="field" style="flex:2"><textarea id="mav-note" rows="2" placeholder="Recommendation note (optional)"></textarea></div></div>' +
-        '<div style="display:flex;gap:0.3rem;margin-top:0.3rem"><button class="success" onclick="doRecommendKickoff(\' + pid + '\',\'recommend_kickoff\')">Recommend Kickoff</button><button class="secondary" onclick="doRecommendKickoff(\' + pid + '\',\'recommend_revision\')">Recommend Revision</button></div>';
+        '<div style="display:flex;gap:0.3rem;margin-top:0.3rem"><button class="success" data-pid="' + pid + '" data-action="recommend_kickoff">Recommend Kickoff</button><button class="secondary" data-pid="' + pid + '" data-action="recommend_revision"> Recommend Revision</button></div>';
     } else if (anyRevision) {
       return '<div style="font-size:0.8rem;color:var(--warning);margin-top:0.5rem">Complete all reviews with no revision needed first.</div>' +
-        '<div style="margin-top:0.3rem"><button class="secondary" onclick="doRecommendKickoff(\' + pid + '\',\'recommend_revision\')">Recommend Revision</button></div>';
+        '<div style="margin-top:0.3rem"><button class="secondary" data-pid="' + pid + '" data-action="recommend_revision"> Recommend Revision</button></div>';
     } else {
       return '<div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.5rem">Waiting for all reviews to complete.</div>';
     }
@@ -2890,6 +2888,20 @@ function applyTranslations() {
       else { alert(d.message || 'Failed'); }
     }
   }
+  async function doRecommendKickoff(pid, action) {
+    var note = document.getElementById('mav-note') ? document.getElementById('mav-note').value : '';
+    var actor = prompt('Your name (Maverick):');
+    if (!actor) return;
+    var d = await _api('POST', '/projects/' + encodeURIComponent(pid) + '/recommend-kickoff', {recommendation: action, note: note, actor: actor});
+    if (d.ok) {
+      await doLoadReview();
+      alert('Recommendation recorded');
+    } else {
+      alert(d.message || d.error || 'Failed');
+    }
+  }
+
+
 
   function escHtml(s) {
     if (!s) return '';
