@@ -1,6 +1,4 @@
-/* GATE PANEL */
-
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <script>
@@ -1158,6 +1156,7 @@ const T = {
   <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
 <script src="/static/utils.js"></script>
 <script src="/static/i18n-runtime.js"></script>
+<script src="/static/gate-surface.js"></script>
 </head>
 <body>
 
@@ -1742,7 +1741,6 @@ const T = {
   </div>
 </div>
 
-<script src="/static/gate-surface.js"></script>
 <script>
   const BASE = '';
   let _currentArtifactModal = null;
@@ -2688,7 +2686,9 @@ const T = {
     else alert(d.message || 'Failed');
   }
 
-  /* ── GATE PANEL ── *
+  /* ── GATE PANEL ── */
+  
+
 
   /* PRE-KICKOFF REVIEW (Sprint 2R) */
 
@@ -2930,7 +2930,6 @@ const T = {
   intakeValidate();
   // Set nav active
   document.querySelectorAll('.nav-item')[0]?.classList.add('active');
-
 </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // static/gate-surface.js - gate interaction surface
 // Extracted from index.html (RFC-2, gate surface extraction)
 
-function doLoadGate() {
+async function doLoadGate() {
     const taskId = document.getElementById('gate-task-id').value.trim();
     const out = document.getElementById('gate-output');
     if (!taskId) { _warn(out, 'Enter a task ID first.'); return; }
