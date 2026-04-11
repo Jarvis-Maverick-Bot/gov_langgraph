@@ -1447,13 +1447,23 @@ def get_artifacts_tool(input: dict) -> dict:
                     at.value in prereq_map
                     and prereq_map[at.value].submitted
                 )
+                prereq_id = (
+                    prereq_map[at.value].artifact_id
+                    if prereq_submitted
+                    else None
+                )
                 artifacts.append({
-                    "artifact_id": None,
+                    "artifact_id": prereq_id,
                     "artifact_type": at.value,
                     "display_name": at.display_name,
                     "generated_by": at.generated_by,
                     "stage_hint": at.stage_hint,
-                    "has_content": False,
+                    "has_content": prereq_submitted,
+                    "content_preview": (
+                        prereq_map[at.value].content_preview
+                        if prereq_submitted
+                        else ""
+                    ),
                     "category": "prerequisite" if prereq_submitted else None,
                 })
 
@@ -1515,6 +1525,24 @@ def get_artifact_tool(input: dict) -> dict:
                                 "has_content": bool(art.content),
                             },
                         }
+            # Also search prerequisite artifacts
+            prereq_map = project.prerequisite_artifacts
+            for at_val, pa in prereq_map.items():
+                if pa.artifact_id == artifact_id:
+                    at_enum = ArtifactType(at_val)
+                    return {
+                        "ok": True,
+                        "artifact": {
+                            "artifact_id": pa.artifact_id,
+                            "artifact_type": at_val,
+                            "display_name": at_enum.display_name,
+                            "project_id": project.project_id,
+                            "content": pa.content_preview,
+                            "produced_by": pa.producer,
+                            "produced_at": pa.submitted_at.isoformat() if pa.submitted_at else None,
+                            "has_content": pa.submitted,
+                        },
+                    }
         return {"ok": True, "artifact": None, "error": "Artifact not found"}
     except Exception as e:
         return _error_response("unknown", f"Failed to get artifact: {e}")

@@ -308,6 +308,7 @@ def _dict_to_project(data: dict) -> Project:
         at = ArtifactType(pa_data["artifact_type"])
         prerequisite_artifacts[at_str] = PrereqArtifact(
             artifact_type=at,
+            artifact_id=pa_data.get("artifact_id"),
             submitted=pa_data.get("submitted", False),
             content_preview=pa_data.get("content_preview", ""),
             producer=pa_data.get("producer", ""),

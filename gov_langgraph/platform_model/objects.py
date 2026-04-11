@@ -232,6 +232,7 @@ class Project:
             raise ValueError(f"Unknown artifact type: {artifact_type}")
 
         pa = self.prerequisite_artifacts[artifact_type]
+        pa.artifact_id = str(uuid.uuid4())
         pa.submitted = True
         pa.content_preview = content_preview
         pa.producer = producer
@@ -252,6 +253,7 @@ class Project:
         return {
             at.value: {
                 "artifact_type": pa.artifact_type.value,
+                "artifact_id": pa.artifact_id,
                 "submitted": pa.submitted,
                 "content_preview": pa.content_preview,
                 "producer": pa.producer,
@@ -729,6 +731,7 @@ class PrereqArtifact:
     Used during the V1.6 intake/pre-kickoff phase.
     """
     artifact_type: ArtifactType
+    artifact_id: Optional[str] = None  # assigned when submitted, used for view/download
     submitted: bool = False
     content_preview: str = ""
     producer: str = ""
