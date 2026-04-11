@@ -33,6 +33,7 @@ from gov_langgraph.openclaw_integration.tools import (
     spawn_agent_tool,
     upsert_artifact_tool,
     get_artifacts_tool,
+    get_artifact_tool,
     create_acceptance_package_tool,
     get_acceptance_package_tool,
     approve_acceptance_tool,
@@ -93,6 +94,9 @@ _ERROR_TYPE_STATUS = {
     "validation_error": 422,
     "already_decided": 409,
     "terminal_state": 409,
+    "reviews_incomplete": 409,
+    "revision_needed": 409,
+    "kickoff_blocked": 409,
     "unknown": 500,
 }
 
@@ -286,6 +290,21 @@ def upsert_artifact(project_id: str, body: dict):
     result = upsert_artifact_tool(body)
     if not result.get("ok", False):
         return _tool_error(result)
+    return result
+
+
+@app.get("/projects/{project_id}/artifacts/{artifact_id}")
+def get_artifact(project_id: str, artifact_id: str):
+    """Get a single artifact by its artifact_id."""
+    result = get_artifact_tool({"artifact_id": artifact_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    artifact = result.get("artifact")
+    if artifact is None:
+        return _tool_error({"error": "not_found", "message": "Artifact not found"})
+    # Verify it belongs to the specified project
+    if artifact.get("project_id") != project_id:
+        return _tool_error({"error": "not_found", "message": "Artifact not found in this project"})
     return result
 
 

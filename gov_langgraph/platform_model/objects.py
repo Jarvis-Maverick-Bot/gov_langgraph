@@ -461,6 +461,11 @@ class Project:
         self.maverick_recommendation.status = recommendation
         self.maverick_recommendation.recommended_at = datetime.utcnow()
         self.maverick_recommendation.note = note
+        # Update project_status to match the recommendation
+        if recommendation == MaverickRecommendationStatus.RECOMMEND_KICKOFF:
+            self.project_status = ProjectStatus.KICKOFF_READY
+        elif recommendation == MaverickRecommendationStatus.RECOMMEND_REVISION:
+            self.project_status = ProjectStatus.REVIEW_REJECTED
 
     def decide_kickoff(
         self,

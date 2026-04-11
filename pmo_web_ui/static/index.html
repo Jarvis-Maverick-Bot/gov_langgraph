@@ -1508,9 +1508,17 @@ const T = {
             </select>
           </div>
           <div class="field narrow">
-            <label>Filter</label>
+            <label>Category</label>
+            <select id="del-category" onchange="renderDeliverableList()">
+              <option value="all">All</option>
+              <option value="prerequisite">Prerequisite Package</option>
+              <option value="delivery">Delivery Artifacts</option>
+            </select>
+          </div>
+          <div class="field narrow">
+            <label>Status</label>
             <select id="del-filter" onchange="renderDeliverableList()">
-              <option value="all">All artifacts</option>
+              <option value="all">All</option>
               <option value="complete">Complete only</option>
               <option value="missing">Missing only</option>
             </select>
@@ -2238,6 +2246,7 @@ const T = {
     if (!cache) return;
     const pid = cache.pid;
     const arts = cache.artifacts || [];
+    const category = document.getElementById('del-category').value;
     const filter = document.getElementById('del-filter').value;
     const search = (document.getElementById('del-search').value || '').toLowerCase();
 
@@ -2256,6 +2265,8 @@ const T = {
       return { type: t, art, info: typeInfo[t] };
     });
 
+    if (category === 'prerequisite') items = items.filter(x => x.art && x.art.category === 'prerequisite');
+    if (category === 'delivery') items = items.filter(x => x.art && x.art.category === 'delivery');
     if (filter === 'complete') items = items.filter(x => x.art && x.art.content);
     if (filter === 'missing') items = items.filter(x => !x.art || !x.art.content);
     if (search) items = items.filter(x =>
@@ -2275,14 +2286,20 @@ const T = {
     <div class="deliverable-list">${items.map(item => {
       const { type, art, info } = item;
       const done = art && art.content;
+      const catBadge = art && art.category === 'prerequisite'
+        ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:0.62rem;padding:1px 6px;border-radius:4px">pkg</span>'
+        : art && art.category === 'delivery'
+        ? '<span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:0.62rem;padding:1px 6px;border-radius:4px">del</span>'
+        : '';
       return `<div class="deliverable-card ${done ? 'complete' : 'missing'}">
         <div class="deliverable-header">
           <div class="deliverable-icon">${info.icon}</div>
           <div class="deliverable-info">
             <div class="deliverable-name">${info.label}</div>
-            <div class="deliverable-meta">${art && art.produced_by ? 'Produced by: ' + _esc(art.produced_by) + ' · ' : ''}${art && art.created_at ? _ts(art.created_at) : 'Not yet produced'}</div>
+            <div class="deliverable-meta">${art && art.produced_by ? 'Produced by: ' + _esc(art.produced_by) + ' · ' : ''}${art && art.produced_at ? _ts(art.produced_at) : 'Not yet produced'}</div>
           </div>
           <div class="deliverable-status">
+            ${catBadge}
             ${done
               ? '<span class="badge badge-complete">✓ Complete</span>'
               : '<span class="badge badge-missing">○ Missing</span>'
@@ -2304,12 +2321,24 @@ const T = {
   }
 
   /* ── ARTIFACT MODAL ── */
-  function openArtifactContent(type) {
+  async function openArtifactContent(type) {
     const cache = window._cachedDeliverables;
     if (!cache) return;
     const art = cache.artifacts.find(a => a.artifact_type === type);
     if (!art) return;
-    openArtifactModal(type, art.content || '(No content)');
+    const pid = cache.pid;
+    // Fetch full content via dedicated endpoint
+    if (art.artifact_id) {
+      try {
+        const d = await _api('GET', '/projects/' + encodeURIComponent(pid) + '/artifacts/' + encodeURIComponent(art.artifact_id));
+        if (d.ok && d.artifact) {
+          openArtifactModal(type, d.artifact.content || '(No content)');
+          return;
+        }
+      } catch(e) { /* fall through to preview */ }
+    }
+    // Fallback to preview if fetch fails
+    openArtifactModal(type, art.content_preview || '(No content available)');
   }
 
   function openArtifactModal(type, content) {
@@ -2341,11 +2370,14 @@ const T = {
   }
 
   async function doExportArtifact(pid, type) {
-    const d = await _api('GET', '/projects/' + encodeURIComponent(pid) + '/artifacts');
-    if (d.ok) {
-      const art = (d.artifacts || []).find(a => a.artifact_type === type);
-      if (art && art.content) {
-        const blob = new Blob([art.content], {type: 'text/plain'});
+    const cache = window._cachedDeliverables;
+    if (!cache) return;
+    const art = cache.artifacts.find(a => a.artifact_type === type);
+    if (!art || !art.artifact_id) return;
+    try {
+      const d = await _api('GET', '/projects/' + encodeURIComponent(pid) + '/artifacts/' + encodeURIComponent(art.artifact_id));
+      if (d.ok && d.artifact && d.artifact.content) {
+        const blob = new Blob([d.artifact.content], {type: 'text/plain'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -2353,11 +2385,11 @@ const T = {
         a.click();
         URL.revokeObjectURL(url);
       }
-    }
+    } catch(e) {}
   }
 
   async function doRequestArtifact(type) {
-    alert(`Request for ${type} sent to relevant agent. This will be handled via the agent spawn system.`);
+    alert(`Request for "${type}" artifact from agent.\n\nNot implemented in Sprint 3R.\n\nThis feature will be built in a future sprint.`);
   }
 
   /* ── ACCEPTANCE ── */

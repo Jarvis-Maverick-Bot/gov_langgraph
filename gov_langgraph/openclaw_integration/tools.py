@@ -498,12 +498,14 @@ def recommend_kickoff_tool(input: dict) -> dict:
             if not project.is_review_complete():
                 return {
                     "ok": False,
+                    "error_type": "reviews_incomplete",
                     "error": "reviews_incomplete",
                     "message": "Cannot recommend kickoff: not all reviews are complete. Complete all reviews first.",
                 }
             if project.any_revision_needed():
                 return {
                     "ok": False,
+                    "error_type": "revision_needed",
                     "error": "revision_needed",
                     "message": "Cannot recommend kickoff: one or more reviews require revision. Recommend revision instead.",
                 }
@@ -636,6 +638,19 @@ def kickoff_task_tool(input: dict) -> dict:
                 "project_not_found",
                 f"Project '{project_id}' not found. Create it first via POST /projects."
             )
+
+        # V1.6 Sprint 2R: block kickoff unless project is KICKOFF_READY
+        project = h["store"].load_project(project_id)
+        if project.project_status != ProjectStatus.KICKOFF_READY:
+            return {
+                "ok": False,
+                "error_type": "kickoff_blocked",
+                "error": "kickoff_blocked",
+                "message": (
+                    f"Cannot kick off: project is in '{project.project_status.value}' state. "
+                    "Complete pre-kickoff review and get Maverick 'Recommend Kickoff' before kicking off."
+                ),
+            }
 
         workitem = WorkItem(
             task_title=title,
@@ -1412,6 +1427,7 @@ def get_artifacts_tool(input: dict) -> dict:
         project = h["store"].load_project(project_id)
 
         type_map = project.get_artifacts_by_type()
+        prereq_map = project.prerequisite_artifacts
         artifacts = []
         for at in ArtifactType.all():
             if at in type_map and not type_map[at].is_empty():
@@ -1423,14 +1439,22 @@ def get_artifacts_tool(input: dict) -> dict:
                     "produced_at": type_map[at].produced_at.isoformat(),
                     "content_preview": type_map[at].content[:200] if type_map[at].content else "",
                     "has_content": True,
+                    "category": "delivery",
                 })
             else:
+                # Check if submitted as prerequisite (no delivery artifact yet)
+                prereq_submitted = (
+                    at.value in prereq_map
+                    and prereq_map[at.value].submitted
+                )
                 artifacts.append({
+                    "artifact_id": None,
                     "artifact_type": at.value,
                     "display_name": at.display_name,
                     "generated_by": at.generated_by,
                     "stage_hint": at.stage_hint,
                     "has_content": False,
+                    "category": "prerequisite" if prereq_submitted else None,
                 })
 
         missing = project.get_missing_artifacts()
@@ -1448,6 +1472,54 @@ def get_artifacts_tool(input: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Artifact retrieval tools
+
+
+def get_artifact_tool(input: dict) -> dict:
+    """
+    Get a single artifact by its artifact_id.
+
+    Args:
+        input: {artifact_id: str}
+    Returns:
+        {ok: bool, artifact: dict | None}
+    """
+    try:
+        h = _harness
+        artifact_id = input.get("artifact_id")
+        if not artifact_id:
+            return _error_response("validation_error", "artifact_id is required")
+
+        # Iterate through projects to find the artifact by ID
+        store = h["store"]
+        for project_id in store.list_projects():
+            try:
+                project = store.load_project(project_id)
+            except Exception:
+                continue
+            type_map = project.get_artifacts_by_type()
+            for at in ArtifactType.all():
+                if at in type_map:
+                    art = type_map[at]
+                    if art.artifact_id == artifact_id:
+                        return {
+                            "ok": True,
+                            "artifact": {
+                                "artifact_id": art.artifact_id,
+                                "artifact_type": art.artifact_type.value,
+                                "display_name": art.artifact_type.display_name,
+                                "project_id": art.project_id,
+                                "content": art.content,
+                                "produced_by": art.produced_by,
+                                "produced_at": art.produced_at.isoformat(),
+                                "has_content": bool(art.content),
+                            },
+                        }
+        return {"ok": True, "artifact": None, "error": "Artifact not found"}
+    except Exception as e:
+        return _error_response("unknown", f"Failed to get artifact: {e}")
+
+
 # Acceptance tools
 def get_acceptance_package_tool(input: dict) -> dict:
     """
