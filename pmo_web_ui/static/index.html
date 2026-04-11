@@ -16,11 +16,99 @@ const T = {
     nav_workspace: 'Workspace',
     nav_intake: 'New Project',
     nav_deliverables: 'Deliverables',
+    // Sprint 2R: Review
+    nav_review: 'Review',
+    // Sprint 2R: Pre-Kickoff Review
+    review_title: 'Pre-Kickoff Review',
+    review_subtitle: 'BA / SA / QA parallel review + Maverick recommendation',
+    review_load: 'Load Review Status',
+    review_select_project: '(select project)',
+    review_no_project: 'Select a project first.',
+    review_project: 'Project',
+    review_load_err: 'Failed to load review status.',
+    review_requester: 'Requested By',
+    review_decided: 'Decided',
+    review_note: 'Note',
+    review_pending: 'pending',
+    review_approved: 'approved',
+    review_revision_needed: 'revision needed',
+    review_btn_request: 'Request Review',
+    review_btn_approve: 'Approve',
+    review_btn_revision: 'Request Revision',
+    review_status_pending: 'Pending',
+    review_no_requester: '—',
+    review_no_decided: '—',
+    // Maverick
+    review_maverick_title: 'Maverick Recommendation',
+    review_maverick_pending: 'Pending — awaiting all reviewer decisions',
+    review_maverick_ready: 'Ready to recommend',
+    review_maverick_kickoff: 'Recommend Kickoff',
+    review_maverick_revision: 'Recommend Revision',
+    review_maverick_note_placeholder: 'Recommendation note (optional)',
+    review_maverick_success: 'Recommendation recorded',
+    review_maverick_blocked: 'Complete all reviews with no revision needed before recommending kickoff.',
+    // Kickoff decision
+    review_kickoff_title: 'Kickoff Decision',
+    review_kickoff_approved: 'Kickoff Approved',
+    review_kickoff_rejected: 'Kickoff Rejected',
+    review_kickoff_note_placeholder: 'Decision note (optional)',
+    review_kickoff_approve: 'Approve Kickoff',
+    review_kickoff_reject: 'Reject & Return',
+    // Reviewer labels
+    review_reviewer_ba: 'Business Analyst',
+    review_reviewer_sa: 'Systems Analyst',
+    review_reviewer_qa: 'Quality Assurance',
+
+
     nav_acceptance: 'Acceptance',
 
     nav_workspace: 'Workspace',
     nav_intake: 'New Project',
     nav_deliverables: 'Deliverables',
+    // Sprint 2R: Review
+    nav_review: 'Review',
+    // Sprint 2R: Pre-Kickoff Review
+    review_title: 'Pre-Kickoff Review',
+    review_subtitle: 'BA / SA / QA parallel review + Maverick recommendation',
+    review_load: 'Load Review Status',
+    review_select_project: '(select project)',
+    review_no_project: 'Select a project first.',
+    review_project: 'Project',
+    review_load_err: 'Failed to load review status.',
+    review_requester: 'Requested By',
+    review_decided: 'Decided',
+    review_note: 'Note',
+    review_pending: 'pending',
+    review_approved: 'approved',
+    review_revision_needed: 'revision needed',
+    review_btn_request: 'Request Review',
+    review_btn_approve: 'Approve',
+    review_btn_revision: 'Request Revision',
+    review_status_pending: 'Pending',
+    review_no_requester: '—',
+    review_no_decided: '—',
+    // Maverick
+    review_maverick_title: 'Maverick Recommendation',
+    review_maverick_pending: 'Pending — awaiting all reviewer decisions',
+    review_maverick_ready: 'Ready to recommend',
+    review_maverick_kickoff: 'Recommend Kickoff',
+    review_maverick_revision: 'Recommend Revision',
+    review_maverick_note_placeholder: 'Recommendation note (optional)',
+    review_maverick_success: 'Recommendation recorded',
+    review_maverick_blocked: 'Complete all reviews with no revision needed before recommending kickoff.',
+    // Kickoff decision
+    review_kickoff_title: 'Kickoff Decision',
+    review_kickoff_approved: 'Kickoff Approved',
+    review_kickoff_rejected: 'Kickoff Rejected',
+    review_kickoff_note_placeholder: 'Decision note (optional)',
+    review_kickoff_approve: 'Approve Kickoff',
+    review_kickoff_reject: 'Reject & Return',
+    // Reviewer labels
+    review_reviewer_ba: 'Business Analyst',
+    review_reviewer_sa: 'Systems Analyst',
+    review_reviewer_qa: 'Quality Assurance',
+
+
     nav_acceptance: 'Acceptance',
 
     // Topbar
@@ -1193,6 +1281,10 @@ function applyTranslations() {
         <span class="nav-icon">＋</span> <span data-i18n="nav_intake">New Project</span>
       </div>
       <div class="nav-item" onclick="navigateTo('deliverables')" id="nav-deliverables">
+      <div class="nav-item" onclick="navigateTo('review')" id="nav-review">
+        <span class="nav-icon">🔍</span> <span data-i18n="nav_review">Review</span>
+      </div>
+
         <span class="nav-icon">📦</span> <span data-i18n="nav_deliverables">Deliverables</span>
       </div>
       <div class="nav-item" onclick="navigateTo('acceptance')" id="nav-acceptance">
@@ -1650,6 +1742,90 @@ function applyTranslations() {
         <div id="gate-output"></div>
       </div>
     </div>
+
+  
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SURFACE: PRE-KICKOFF REVIEW (Sprint 2R)                  -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-review">
+      <div class="surface-header">
+        <div class="surface-breadcrumb">
+          <a onclick="navigateTo('workspace')">Workspace</a>
+          <span>›</span>
+          <span>Pre-Kickoff Review</span>
+        </div>
+        <div class="surface-title" data-i18n="review_title">Pre-Kickoff Review</div>
+        <div class="surface-subtitle" data-i18n="review_subtitle">BA / SA / QA parallel review + Maverick recommendation</div>
+      </div>
+
+      <!-- Project selector + load -->
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="card-header">
+          <div class="card-title" data-i18n="review_project">Project</div>
+        </div>
+        <div class="form-row">
+          <div class="field" style="flex:2">
+            <select id="review-project-select" onchange="onReviewProjectChange()">
+              <option value="" data-i18n="review_select_project">(select project)</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end">
+            <button onclick="doLoadReview()" data-i18n="review_load">Load Review Status</button>
+          </div>
+        </div>
+        <div id="review-output"></div>
+      </div>
+
+      <!-- Reviewer status cards -->
+      <div id="review-cards" style="display:none">
+        <!-- BA / SA / QA cards side by side -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+          <div class="card" id="review-card-ba">
+            <div class="card-header">
+              <div class="card-title">BA</div>
+              <div class="card-subtitle" data-i18n="review_reviewer_ba">Business Analyst</div>
+            </div>
+            <div id="review-ba-status" style="margin:0.75rem 0"></div>
+            <div id="review-ba-actions"></div>
+          </div>
+          <div class="card" id="review-card-sa">
+            <div class="card-header">
+              <div class="card-title">SA</div>
+              <div class="card-subtitle" data-i18n="review_reviewer_sa">Systems Analyst</div>
+            </div>
+            <div id="review-sa-status" style="margin:0.75rem 0"></div>
+            <div id="review-sa-actions"></div>
+          </div>
+          <div class="card" id="review-card-qa">
+            <div class="card-header">
+              <div class="card-title">QA</div>
+              <div class="card-subtitle" data-i18n="review_reviewer_qa">Quality Assurance</div>
+            </div>
+            <div id="review-qa-status" style="margin:0.75rem 0"></div>
+            <div id="review-qa-actions"></div>
+          </div>
+        </div>
+
+        <!-- Maverick Recommendation card -->
+        <div class="card" id="review-maverick-card" style="border-color:var(--accent);margin-bottom:1.5rem">
+          <div class="card-header">
+            <div class="card-title">Maverick Recommendation</div>
+          </div>
+          <div id="review-maverick-status" style="margin:0.75rem 0"></div>
+          <div id="review-maverick-actions"></div>
+        </div>
+
+        <!-- Kickoff Decision card (shown after Maverick recommends kickoff) -->
+        <div class="card" id="review-kickoff-card" style="display:none;border-color:var(--green)">
+          <div class="card-header">
+            <div class="card-title">Kickoff Decision</div>
+          </div>
+          <div id="review-kickoff-status" style="margin:0.75rem 0"></div>
+          <div id="review-kickoff-actions"></div>
+        </div>
+      </div>
+    </div>
+
 
   </main>
 </div>
@@ -2136,12 +2312,16 @@ function applyTranslations() {
 
   function doProceedToReview() {
     // Placeholder: Sprint 2R will wire up pre-kickoff review surface
-    alert('Pre-kickoff review surface is Sprint 2R work. Project is ready for review.');
+    navigateTo('review'); doLoadReview();
   }
 
   /* ── DELIVERABLES BROWSER ── */
   async function loadDelProjects() {
     const sel = document.getElementById('del-project-select');
+      const revSel = document.getElementById('review-project-select');
+      if (revSel) {
+        revSel.innerHTML = '<option value="">' + (T[_lang] && T[_lang].review_select_project || '(select project)') + '</option>' + sel.innerHTML.replace(/<option value="">[^<]*<\/option>/, '');
+      }
     try {
       const d = await _api('GET', '/projects');
       if (!d.ok) return;
@@ -2673,6 +2853,169 @@ function applyTranslations() {
   async function doRejectGate(taskId) {
     const note = document.getElementById('gate-decision-note')?.value.trim();
     if (!note) { alert('Rejection note is required.'); return; }
+
+  /* ── PRE-KICKOFF REVIEW (Sprint 2R) ── */
+  async function doLoadReview() {
+    const pid = document.getElementById('review-project-select').value;
+    const out = document.getElementById('review-output');
+    if (!pid) { _err(out, t('review_no_project')); return; }
+    _neutral(out, 'Loading…');
+    const d = await _api('GET', '/projects/' + encodeURIComponent(pid) + '/review-status');
+    if (!d.ok) { _err(out, d.message || t('review_load_err')); return; }
+    _ok(out, 'Review status loaded');
+    renderReviewCards(pid, d);
+    document.getElementById('review-cards').style.display = '';
+  }
+
+  async function onReviewProjectChange() {
+    document.getElementById('review-cards').style.display = 'none';
+    document.getElementById('review-output').innerHTML = '';
+  }
+
+  function renderReviewCards(pid, d) {
+    const rs = d.review_status;
+    const reviewers = ['ba', 'sa', 'qa'];
+    const labels = { ba: 'BA', sa: 'SA', qa: 'QA' };
+
+    reviewers.forEach(function(r) {
+      const s = rs[r];
+      const statusEl = document.getElementById('review-' + r + '-status');
+      const actionsEl = document.getElementById('review-' + r + '-actions');
+      statusEl.innerHTML = renderReviewerStatus(s, labels[r]);
+      actionsEl.innerHTML = renderReviewerActions(pid, r, s);
+    });
+
+    // Maverick recommendation
+    const mav = rs.maverick_recommendation;
+    const mavStatusEl = document.getElementById('review-maverick-status');
+    const mavActionsEl = document.getElementById('review-maverick-actions');
+    mavStatusEl.innerHTML = renderMaverickStatus(mav);
+    mavActionsEl.innerHTML = renderMaverickActions(pid, mav, d.can_recommend_kickoff, d.any_revision_needed);
+
+    // Kickoff decision (shown only after Maverick recommends kickoff)
+    const kickoffCard = document.getElementById('review-kickoff-card');
+    if (mav.status === 'recommend_kickoff') {
+      kickoffCard.style.display = '';
+      const kickStatusEl = document.getElementById('review-kickoff-status');
+      const kickActionsEl = document.getElementById('review-kickoff-actions');
+      kickStatusEl.innerHTML = '<div style="color:var(--green);font-weight:600">Kickoff Recommended — Awaiting Alex Decision</div>';
+      kickActionsEl.innerHTML = '<div class="form-row"><div class="field" style="flex:2"><textarea id="kickoff-note" rows="2" placeholder="' + t('review_kickoff_note_placeholder') + '"></textarea></div></div><div style="display:flex;gap:0.5rem;margin-top:0.5rem"><button class="success" onclick="doApproveKickoff(\'' + pid + '\')">' + t('review_kickoff_approve') + '</button><button class="danger" onclick="doRejectKickoff(\'' + pid + '\')">' + t('review_kickoff_reject') + '</button></div>';
+    } else {
+      kickoffCard.style.display = 'none';
+    }
+  }
+
+  function renderReviewerStatus(s, label) {
+    const statusMap = {
+      'pending': { cls: 'neutral', label: t('review_pending') },
+      'approved': { cls: 'ok', label: t('review_approved') },
+      'revision_needed': { cls: 'error', label: t('review_revision_needed') }
+    };
+    const info = statusMap[s.status] || statusMap['pending'];
+    const requester = s.requested_at ? escHtml(s.requested_at.substring(0, 16)) : t('review_no_requester');
+    const decided = s.decided_at ? escHtml(s.decided_at.substring(0, 16)) : t('review_no_decided');
+    const note = s.note ? '<div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.25rem">' + escHtml(s.note) + '</div>' : '';
+    return '<div class="output ' + info.cls + '" style="margin:0">' + info.label + '</div>' +
+      '<div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.3rem">Requested: ' + requester + '</div>' +
+      '<div style="font-size:0.75rem;color:var(--text-dim)">Decided: ' + decided + '</div>' +
+      note;
+  }
+
+  function renderReviewerActions(pid, reviewer, s) {
+    if (s.status !== 'pending') {
+      return ''; // Already decided, no action
+    }
+    return '<button class="success sm" onclick="doRequestReview(\'' + pid + '\',\'' + reviewer + '\')" style="margin-top:0.5rem">' + t('review_btn_request') + '</button>' +
+      '<div style="display:flex;gap:0.3rem;margin-top:0.3rem">' +
+      '<button class="success sm" onclick="doRecordOutcome(\'' + pid + '\',\'' + reviewer + '\',\'approved\')">' + t('review_btn_approve') + '</button>' +
+      '<button class="danger sm" onclick="doRecordOutcome(\'' + pid + '\',\'' + reviewer + '\',\'revision_needed\')">' + t('review_btn_revision') + '</button>' +
+      '</div>';
+  }
+
+  function renderMaverickStatus(mav) {
+    const statusMap = {
+      'pending': { cls: 'neutral', label: t('review_maverick_pending') },
+      'recommend_kickoff': { cls: 'ok', label: t('review_maverick_kickoff') },
+      'recommend_revision': { cls: 'error', label: t('review_maverick_revision') }
+    };
+    const info = statusMap[mav.status] || statusMap['pending'];
+    const when = mav.recommended_at ? escHtml(mav.recommended_at.substring(0, 16)) : '—';
+    const note = mav.note ? '<div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.25rem">' + escHtml(mav.note) + '</div>' : '';
+    return '<div class="output ' + info.cls + '" style="margin:0">' + info.label + '</div>' +
+      '<div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.3rem">When: ' + when + '</div>' +
+      note;
+  }
+
+  function renderMaverickActions(pid, mav, canRec, anyRevision) {
+    if (mav.status !== 'pending') {
+      return ''; // Already recommended
+    }
+    if (canRec) {
+      return '<div class="form-row" style="margin-top:0.5rem"><div class="field" style="flex:2"><textarea id="mav-note" rows="2" placeholder="' + t('review_maverick_note_placeholder') + '"></textarea></div></div>' +
+        '<div style="display:flex;gap:0.3rem;margin-top:0.3rem"><button class="success" onclick="doRecommendKickoff(\'' + pid + '\',\'recommend_kickoff\')">' + t('review_maverick_kickoff') + '</button><button class="secondary" onclick="doRecommendKickoff(\'' + pid + '\',\'recommend_revision\')">' + t('review_maverick_revision') + '</button></div>';
+    } else if (anyRevision) {
+      return '<div style="font-size:0.8rem;color:var(--warning);margin-top:0.5rem">' + t('review_maverick_blocked') + '</div>' +
+        '<div style="margin-top:0.3rem"><button class="secondary" onclick="doRecommendKickoff(\'' + pid + '\',\'recommend_revision\')">' + t('review_maverick_revision') + '</button></div>';
+    } else {
+      return '<div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.5rem">' + t('review_maverick_ready') + '</div>';
+    }
+  }
+
+  async function doRequestReview(pid, reviewer) {
+    const actor = prompt('Your name (Maverick):');
+    if (!actor) return;
+    const d = await _api('POST', '/projects/' + encodeURIComponent(pid) + '/reviews/' + reviewer + '/request', { actor: actor });
+    if (d.ok) { await doLoadReview(); }
+    else { alert(d.message || 'Failed'); }
+  }
+
+  async function doRecordOutcome(pid, reviewer, outcome) {
+    const note = prompt('Decision note (optional):') || '';
+    const actor = prompt('Reviewer name:');
+    if (!actor) return;
+    const d = await _api('POST', '/projects/' + encodeURIComponent(pid) + '/reviews/' + reviewer + '/outcome', { outcome: outcome, note: note, actor: actor });
+    if (d.ok) { await doLoadReview(); }
+    else { alert(d.message || 'Failed'); }
+  }
+
+  async function doRecommendKickoff(pid, recommendation) {
+    const note = document.getElementById('mav-note') ? document.getElementById('mav-note').value : '';
+    const actor = prompt('Your name (Maverick):');
+    if (!actor) return;
+    const d = await _api('POST', '/projects/' + encodeURIComponent(pid) + '/recommend-kickoff', { recommendation: recommendation, note: note, actor: actor });
+    if (d.ok) {
+      // Reload review status
+      await doLoadReview();
+      alert(t('review_maverick_success'));
+    } else {
+      alert(d.message || d.error || 'Failed');
+    }
+  }
+
+  async function doApproveKickoff(pid) {
+    const note = document.getElementById('kickoff-note') ? document.getElementById('kickoff-note').value : '';
+    const actor = prompt('Your name (Alex):');
+    if (!actor) return;
+    // V1.6: Alex approves kickoff — record via kickoff_decision on project
+    // For now: alert (kickoff_decision tool not yet exposed via frontend)
+    // This is intentionally a placeholder — actual kickoff tool needs separate implementation
+    alert('Kickoff APPROVED by ' + actor + '. Note: ' + note);
+  }
+
+  async function doRejectKickoff(pid) {
+    const note = document.getElementById('kickoff-note') ? document.getElementById('kickoff-note').value : '';
+    if (!note) { alert('Rejection note is required.'); return; }
+    const actor = prompt('Your name (Alex):');
+    if (!actor) return;
+    alert('Kickoff REJECTED by ' + actor + '. Reason: ' + note);
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+
     const actor = prompt('Your name:');
     if (!actor) return;
     const d = await _api('POST', '/gate/' + encodeURIComponent(taskId) + '/reject', {actor, reason: note});

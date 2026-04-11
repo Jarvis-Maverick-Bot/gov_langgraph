@@ -47,6 +47,12 @@ from gov_langgraph.openclaw_integration.tools import (
     complete_intake_tool,
     submit_prerequisite_tool,
     get_prerequisite_package_tool,
+    request_ba_review_tool,
+    request_sa_review_tool,
+    request_qa_review_tool,
+    record_review_outcome_tool,
+    get_review_status_tool,
+    recommend_kickoff_tool,
 )
 
 PORT = int(os.getenv("PMO_PORT", "8000"))
@@ -453,6 +459,95 @@ def intake_complete(body: dict):
                 status_code=422,
             )
     result = complete_intake_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Sprint 2R: Pre-Kickoff Review Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/projects/{project_id}/reviews/{reviewer}/request")
+def request_review(project_id: str, reviewer: str, body: dict):
+    """
+    Request a pre-kickoff review from BA, SA, or QA.
+    reviewer: 'ba' | 'sa' | 'qa'
+    Required: actor
+    """
+    if reviewer not in ("ba", "sa", "qa"):
+        return JSONResponse(
+            content={"ok": False, "error_type": "validation_error",
+                     "message": f"Invalid reviewer: {reviewer}. Must be ba, sa, or qa."},
+            status_code=422,
+        )
+    body["project_id"] = project_id
+    tool = {"ba": request_ba_review_tool, "sa": request_sa_review_tool, "qa": request_qa_review_tool}[reviewer]
+    result = tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/reviews/{reviewer}/outcome")
+def record_review_outcome(project_id: str, reviewer: str, body: dict):
+    """
+    Record a reviewer's outcome: APPROVED or REVISION_NEEDED.
+    reviewer: 'ba' | 'sa' | 'qa'
+    Required: outcome ('approved' | 'revision_needed'), actor
+    Optional: note
+    """
+    if reviewer not in ("ba", "sa", "qa"):
+        return JSONResponse(
+            content={"ok": False, "error_type": "validation_error",
+                     "message": f"Invalid reviewer: {reviewer}. Must be ba, sa, or qa."},
+            status_code=422,
+        )
+    required = ["outcome", "actor"]
+    for field in required:
+        if field not in body:
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing field: {field}"},
+                status_code=422,
+            )
+    body["project_id"] = project_id
+    body["reviewer"] = reviewer
+    result = record_review_outcome_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.get("/projects/{project_id}/review-status")
+def get_review_status(project_id: str):
+    """
+    Get full pre-kickoff review status for a project.
+    Returns BA/SA/QA review records + Maverick recommendation.
+    """
+    result = get_review_status_tool({"project_id": project_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/projects/{project_id}/recommend-kickoff")
+def recommend_kickoff(project_id: str, body: dict):
+    """
+    Maverick makes a kickoff recommendation: RECOMMEND_KICKOFF or RECOMMEND_REVISION.
+    Required: recommendation ('recommend_kickoff' | 'recommend_revision'), actor
+    Optional: note
+    """
+    required = ["recommendation", "actor"]
+    for field in required:
+        if field not in body:
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing field: {field}"},
+                status_code=422,
+            )
+    body["project_id"] = project_id
+    result = recommend_kickoff_tool(body)
     if not result.get("ok", False):
         return _tool_error(result)
     return result
