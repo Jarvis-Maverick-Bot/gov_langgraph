@@ -51,7 +51,7 @@ const T = {
 
     // Topbar
     topbar_select_project: 'Select project…',
-    topbar_version: 'v1.5',
+    topbar_version: 'v1.6',
     lang_toggle: 'EN / 中文',
     lang_toggle: 'EN / 中文',
 
@@ -184,7 +184,7 @@ const T = {
 
     // Topbar
     topbar_select_project: '选择项目…',
-    topbar_version: 'v1.5',
+    topbar_version: 'v1.6',
     lang_toggle: 'EN / 中文',
 
     // Projects page
@@ -657,7 +657,7 @@ const T = {
     button.success { background: var(--green); }
     button.success:hover { background: #16a34a; }
     button.secondary { background: var(--border-light); color: var(--text); }
-    button.secondary:hover { background: #334155; }
+    button.secondary:hover { background: var(--text-dim); }
     button.ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
     button.ghost:hover { border-color: var(--accent); color: var(--accent); }
     button.sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
@@ -1226,9 +1226,6 @@ const T = {
       <div class="nav-item" onclick="navigateTo('advisories')" id="nav-advisories">
         <span class="nav-icon">⚠️</span> <span data-i18n="nav_advisories">Advisories</span>
         <span class="nav-badge hidden" id="advisory-badge"></span>
-      </div>
-      <div class="nav-item" onclick="navigateTo('gate')" id="nav-gate">
-        <span class="nav-icon">🚦</span> <span data-i18n="nav_gate">Gate Panel</span>
       </div>
     </div>
   </nav>
