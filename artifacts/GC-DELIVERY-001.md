@@ -14,9 +14,11 @@
 |-------|-------|
 | Artifact ID | GC-BUILD-001 |
 | Description | Grid Chase game engine + REST API + basic dashboard |
-| Location | `D:/Projects/gov_langgraph/artifacts/GC-BUILD-001/` |
+| Location | `gov_langgraph/artifacts/GC-BUILD-001/` — `origin/v1.7`, commit `a1da32b` |
 | Format | Python source + HTML |
 | Delivery target | SPEC §1: "single-process local game engine, REST API, web dashboard" |
+
+*Host-local path (environment detail, optional): `D:/Projects/gov_langgraph/artifacts/GC-BUILD-001/`*
 
 ---
 
@@ -35,8 +37,8 @@ Per Production Handoff Package (GC-HANDOVER-001):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | `engine.py` | ✅ Delivered | Core game logic: grid, movement, token collection, scoring |
-| `api.py` | ✅ Delivered | Flask REST API: all 7 endpoints per SPEC §6.3 |
-| `dashboard.html` | ✅ Delivered | Human observation dashboard (static file, opens in browser) |
+| `api.py` | ✅ Delivered | Flask REST API (all required endpoints) |
+| `dashboard.html` | ✅ Delivered | Human observation dashboard |
 | `requirements.txt` | ✅ Delivered | Flask dependency |
 | `run.bat` | ✅ Delivered | Windows launch script |
 | Multi-agent concurrent sessions | ❌ Not in scope | V1.7 single-session only |
@@ -49,11 +51,10 @@ Per Production Handoff Package (GC-HANDOVER-001):
 | Limit | Explanation |
 |-------|-------------|
 | Local single-process only | No distributed deployment; one game server at a time |
-| Static dashboard file | dashboard.html opened directly (not served via Flask API) |
+| Static dashboard file | `dashboard.html` opened directly (not served via Flask) |
 | Single-session operation | No multi-agent tournament infrastructure |
 | No persistence | Runs in memory; no database |
 | No authentication | Open local access only |
-| Windows launch only | `run.bat` provided; macOS/Linux users can run `python api.py` |
 
 ---
 
@@ -68,11 +69,10 @@ Per Production Handoff Package (GC-HANDOVER-001):
 - Full 6-stage pipeline exercised ✅
 - Viper trigger recorded ✅
 
-**This is not:**
+**Not provided:**
 - Commercial quality software
-- A hosted service
-- A polished product
-- A multi-agent tournament platform
+- Hosted service
+- Multi-agent tournament platform
 
 **Acceptance decision:** ACCEPT for V1.7 bar — minimum viable governed game production exercise.
 
@@ -80,14 +80,14 @@ Per Production Handoff Package (GC-HANDOVER-001):
 
 ## 6. Chain Reference
 
-| Stage | Artifact | ID | Verified |
-|-------|----------|-----|----------|
-| CONCEPT | Game Brief | GC-BRIEF-001 | ✅ |
-| GAME_SPEC | Game Spec | GC-SPEC-001 | ✅ |
-| PRODUCTION_PREP | Handoff Package | GC-HANDOVER-001 | ✅ |
-| PRODUCTION_BUILD | Build Candidate | GC-BUILD-001 | ✅ |
-| QA_PLAYTEST | Validation Record | GC-VALIDATION-001 | ✅ |
-| ACCEPTANCE_DELIVERY | Delivery Package | GC-DELIVERY-001 | ✅ This |
+| Stage | Artifact | ID | Commit |
+|-------|----------|-----|--------|
+| CONCEPT | Game Brief | GC-BRIEF-001 | Sprint 3R |
+| GAME_SPEC | Game Spec | GC-SPEC-001 | Sprint 3R |
+| PRODUCTION_PREP | Handoff Package | GC-HANDOVER-001 | `a1da32b` |
+| PRODUCTION_BUILD | Build Candidate | GC-BUILD-001 | `a1da32b` |
+| QA_PLAYTEST | Validation Record | GC-VALIDATION-001 | `a1da32b` |
+| ACCEPTANCE_DELIVERY | Delivery Package | GC-DELIVERY-001 | `a1da32b` |
 
 ---
 
