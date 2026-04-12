@@ -56,6 +56,13 @@ from gov_langgraph.openclaw_integration.tools import (
     record_review_outcome_tool,
     get_review_status_tool,
     recommend_kickoff_tool,
+    create_game_tool,
+    advance_game_stage_tool,
+    get_game_tool,
+    list_games_tool,
+    raise_game_escalation_tool,
+    submit_game_status_report_tool,
+    approve_game_concept_tool,
 )
 
 PORT = int(os.getenv("PMO_PORT", "8000"))
@@ -659,6 +666,117 @@ def test_spawn():
             "spawned": False,
             "error": str(e),
         }
+
+
+# ---------------------------------------------------------------------------
+# Game production endpoints (Sprint 4R)
+# ---------------------------------------------------------------------------
+
+@app.post("/games")
+def create_game(body: dict):
+    """"Create a new game WorkItem at CONCEPT stage."""
+    required = ["title", "owner"]
+    for field in required:
+        if field not in body or not str(body[field]).strip():
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing required field: {field}"},
+                status_code=422,
+            )
+    result = create_game_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.get("/games")
+def list_games(owner: str | None = None, stage: str | None = None):
+    """List all game work items, optionally filtered."""
+    input_dict = {}
+    if owner:
+        input_dict["owner"] = owner
+    if stage:
+        input_dict["stage"] = stage
+    result = list_games_tool(input_dict)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+
+@app.get("/games/{game_id}")
+def get_game(game_id: str):
+    """Get game details including game_fields."""
+    result = get_game_tool({"game_id": game_id})
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/games/{game_id}/stage")
+def advance_game_stage(game_id: str, body: dict):
+    """
+    Advance a game to a new stage.
+    Required: new_stage, actor
+    Optional: concept_approved, artifact_id, viper_triggered, trigger_note
+    """
+    required = ["new_stage", "actor"]
+    for field in required:
+        if field not in body:
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing required field: {field}"},
+                status_code=422,
+            )
+    body["game_id"] = game_id
+    result = advance_game_stage_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+
+@app.post("/games/{game_id}/escalate")
+def raise_game_escalation(game_id: str, body: dict):
+    """PMO raises an escalation for a game."""
+    required = ["reason"]
+    for field in required:
+        if field not in body:
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing required field: {field}"},
+                status_code=422,
+            )
+    body["game_id"] = game_id
+    result = raise_game_escalation_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+@app.post("/games/{game_id}/status-report")
+def submit_game_status_report(game_id: str, body: dict):
+    """"Submit a status report for a game."""
+    required = ["stage", "status", "progress", "next_action", "actor"]
+    for field in required:
+        if field not in body:
+            return JSONResponse(
+                content={"ok": False, "error_type": "validation_error",
+                         "message": f"Missing required field: {field}"},
+                status_code=422,
+            )
+    body["game_id"] = game_id
+    result = submit_game_status_report_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
+
+@app.post("/games/{game_id}/concept-approve")
+def approve_game_concept(game_id: str, body: dict):
+    """Record governance concept approval for a game."""
+    body["game_id"] = game_id
+    result = approve_game_concept_tool(body)
+    if not result.get("ok", False):
+        return _tool_error(result)
+    return result
 
 
 # ---------------------------------------------------------------------------

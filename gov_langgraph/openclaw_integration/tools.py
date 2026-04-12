@@ -2148,3 +2148,472 @@ def spawn_agent_tool(input: dict) -> dict:
         }
     except Exception as e:
         return _error_response("unknown", f"Failed to spawn agent: {e}")
+
+
+# ============================================================================
+# GAME PRODUCTION TOOLS (Sprint 4R)
+# ============================================================================
+
+from pathlib import Path
+from datetime import datetime as dt
+
+
+# Game stages for production workflow
+GAME_STAGES = [
+    "CONCEPT",
+    "GAME_SPEC",
+    "PRODUCTION_PREP",
+    "PRODUCTION_BUILD",
+    "QA_PLAYTEST",
+    "ACCEPTANCE_DELIVERY",
+]
+
+GAME_STAGE_TRANSITIONS = {
+    "CONCEPT": ["GAME_SPEC"],
+    "GAME_SPEC": ["PRODUCTION_PREP"],
+    "PRODUCTION_PREP": ["PRODUCTION_BUILD"],
+    "PRODUCTION_BUILD": ["QA_PLAYTEST"],
+    "QA_PLAYTEST": ["ACCEPTANCE_DELIVERY"],
+    "ACCEPTANCE_DELIVERY": [],
+}
+
+
+
+def _game_fields_path(task_id: str) -> Path:
+    """Path to game_fields JSON file for a game work item."""
+    cfg = _harness["config"]
+    gf_dir = Path(cfg.state_dir) / "_game_fields"
+    gf_dir.mkdir(parents=True, exist_ok=True)
+    return gf_dir / f"{task_id}.json"
+
+
+
+def _init_game_fields(task_id: str, owner: str) -> None:
+    """Initialize game_fields storage for a new game work item."""
+    import json
+    data = {
+        "task_id": task_id,
+        "concept_approved": False,
+        "artifact_ids": {},
+        "viper_triggered": False,
+        "trigger_note": "",
+        "trigger_decided_by": None,
+        "trigger_decided_at": None,
+        "escalation": None,
+        "status_reports": [],
+        "created_at": dt.utcnow().isoformat(),
+        "created_by": owner,
+    }
+    _game_fields_path(task_id).write_text(
+        json.dumps(data, indent=2), encoding="utf-8"
+    )
+
+
+
+def _load_game_fields(task_id: str) -> dict:
+    """Load game_fields for a game work item."""
+    import json
+    path = _game_fields_path(task_id)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _save_game_fields(task_id: str, game_fields: dict) -> None:
+    """Save game_fields for a game work item."""
+    import json
+    _game_fields_path(task_id).write_text(
+        json.dumps(game_fields, indent=2), encoding="utf-8"
+    )
+
+
+
+def create_game_tool(input: dict) -> dict:
+    """
+    Create a new game production WorkItem at CONCEPT stage.
+
+    Required: title, owner
+    Optional: project_id (defaults to '_game_production_')
+
+    """
+    try:
+        h = _harness
+        title = input.get("title", "").strip()
+        owner = input.get("owner", "").strip()
+        project_id = input.get("project_id", "_game_production_")
+
+
+        if not title:
+            return _error_response("validation_error", "title is required")
+        if not owner:
+            return _error_response("validation_error", "owner is required")
+
+
+        workitem = WorkItem(
+            task_title=title,
+            project_id=project_id,
+            task_description="game_production",
+            current_owner=owner,
+            current_stage="CONCEPT",
+            task_status=TaskStatus.IN_PROGRESS,
+        )
+        h["store"].save_workitem(workitem)
+        _init_game_fields(workitem.task_id, owner)
+
+        h["journal"].append_raw(
+            project_id=project_id,
+            event_type="game_created",
+            event_summary=f"Game '{title}' created at CONCEPT stage by {owner}",
+            actor=owner,
+            task_id=workitem.task_id,
+        )
+
+        return {
+            "ok": True,
+            "game_id": workitem.task_id,
+            "title": title,
+            "owner": owner,
+            "current_stage": "CONCEPT",
+            "project_id": project_id,
+            "message": f"Game '{title}' created at CONCEPT stage",
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to create game: {e}")
+
+
+def advance_game_stage_tool(input: dict) -> dict:
+    """
+    Advance a game WorkItem to a new stage.
+
+    Required: game_id, new_stage, actor
+    Optional: concept_approved, artifact_id, viper_triggered, trigger_note
+
+    Governance gate: CONCEPT -> GAME_SPEC requires concept_approved=true
+    Viper trigger: recorded at PRODUCTION_PREP -> PRODUCTION_BUILD boundary
+    """
+    try:
+        h = _harness
+        game_id = input.get("game_id", "").strip()
+        new_stage = input.get("new_stage", "").strip()
+        actor = input.get("actor", "PMO").strip()
+        artifact_id = input.get("artifact_id")
+        concept_approved = input.get("concept_approved", False)
+        viper_triggered = input.get("viper_triggered", False)
+        trigger_note = input.get("trigger_note", "")
+
+
+        if not game_id:
+            return _error_response("validation_error", "game_id is required")
+        if not new_stage:
+            return _error_response("validation_error", "new_stage is required")
+
+        try:
+            workitem = h["store"].load_workitem(game_id)
+        except ObjectNotFoundError:
+            return _error_response("task_not_found", f"Game '{game_id}' not found")
+
+
+        current_stage = workitem.current_stage
+        valid_next = GAME_STAGE_TRANSITIONS.get(current_stage, [])
+        if new_stage not in valid_next:
+            return _error_response(
+                "validation_error",
+                f"Invalid transition {current_stage} -> {new_stage}. Allowed: {valid_next}"
+            )
+
+
+        if current_stage == "CONCEPT" and new_stage == "GAME_SPEC":
+            if not concept_approved:
+                return _error_response(
+                    "validation_error",
+                    "Concept approval required before advancing to GAME_SPEC"
+                )
+
+        trigger_fired = None
+        if current_stage == "PRODUCTION_PREP" and new_stage == "PRODUCTION_BUILD":
+            trigger_fired = viper_triggered
+
+
+        workitem.current_stage = new_stage
+        h["store"].save_workitem(workitem)
+
+
+        game_fields = _load_game_fields(game_id)
+        if artifact_id:
+            game_fields.setdefault("artifact_ids", {})[new_stage] = artifact_id
+        if trigger_fired is not None:
+            game_fields["viper_triggered"] = trigger_fired
+            game_fields["trigger_note"] = trigger_note
+            game_fields["trigger_decided_by"] = actor
+            game_fields["trigger_decided_at"] = dt.utcnow().isoformat()
+        _save_game_fields(game_id, game_fields)
+
+        summary = f"Game stage advanced: {current_stage} -> {new_stage} by {actor}"
+        if trigger_fired is not None:
+            summary += f" [viper_triggered={trigger_fired}]"
+        if artifact_id:
+            summary += f" artifact={artifact_id}"
+
+        h["journal"].append_raw(
+            project_id=workitem.project_id,
+            event_type="game_stage_advanced",
+            event_summary=summary,
+            actor=actor,
+            task_id=game_id,
+        )
+
+        return {
+            "ok": True,
+            "game_id": game_id,
+            "previous_stage": current_stage,
+            "current_stage": new_stage,
+            "viper_triggered": trigger_fired,
+            "message": f"Game advanced: {current_stage} -> {new_stage}",
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to advance game stage: {e}")
+
+
+
+
+def get_game_tool(input: dict) -> dict:
+    """Get game details including game_fields."""
+    try:
+        h = _harness
+        game_id = input.get("game_id", "").strip()
+
+        if not game_id:
+            return _error_response("validation_error", "game_id is required")
+
+
+        try:
+            workitem = h["store"].load_workitem(game_id)
+        except ObjectNotFoundError:
+            return _error_response("task_not_found", f"Game '{game_id}' not found")
+
+        game_fields = _load_game_fields(game_id)
+
+        return {
+            "ok": True,
+            "game_id": game_id,
+            "title": workitem.task_title,
+            "current_stage": workitem.current_stage,
+            "owner": workitem.current_owner,
+            "project_id": workitem.project_id,
+            "task_status": workitem.task_status.value,
+            "game_fields": game_fields,
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to get game: {e}")
+
+
+
+
+def list_games_tool(input: dict) -> dict:
+    """List all game work items, optionally filtered by owner or stage."""
+    try:
+        h = _harness
+        owner_filter = input.get("owner")
+        stage_filter = input.get("stage")
+
+
+        all_task_ids = h["store"].list_workitems(project_id=None)
+        games = []
+
+
+        for tid in all_task_ids:
+            try:
+                workitem = h["store"].load_workitem(tid)
+            except Exception:
+                continue
+            if getattr(workitem, "task_description", "") != "game_production":
+                continue
+            if owner_filter and workitem.current_owner != owner_filter:
+                continue
+            if stage_filter and workitem.current_stage != stage_filter:
+                continue
+
+
+            game_fields = _load_game_fields(tid)
+            games.append({
+                "game_id": tid,
+                "title": workitem.task_title,
+                "current_stage": workitem.current_stage,
+                "owner": workitem.current_owner,
+                "task_status": workitem.task_status.value,
+                "viper_triggered": game_fields.get("viper_triggered", False),
+                "escalation": game_fields.get("escalation"),
+            })
+
+        return {
+            "ok": True,
+            "games": games,
+            "count": len(games),
+            "message": f"{len(games)} game(s) found",
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to list games: {e}")
+
+
+def raise_game_escalation_tool(input: dict) -> dict:
+    """PMO raises an escalation for a game with a reason."""
+    try:
+        h = _harness
+        game_id = input.get("game_id", "").strip()
+        reason = input.get("reason", "").strip()
+        actor = input.get("actor", "PMO").strip()
+
+        if not game_id:
+            return _error_response("validation_error", "game_id is required")
+
+
+        try:
+            workitem = h["store"].load_workitem(game_id)
+        except ObjectNotFoundError:
+            return _error_response("task_not_found", f"Game '{game_id}' not found")
+
+
+        escalation = {
+            "escalated": True,
+            "reason": reason,
+            "by": actor,
+            "at": dt.utcnow().isoformat(),
+        }
+
+
+        game_fields = _load_game_fields(game_id)
+        game_fields["escalation"] = escalation
+        _save_game_fields(game_id, game_fields)
+
+
+        h["journal"].append_raw(
+            project_id=workitem.project_id,
+            event_type="game_escalation_raised",
+            event_summary=f"Escalation raised for game '{workitem.task_title}' by {actor}: {reason}",
+            actor=actor,
+            task_id=game_id,
+        )
+
+        return {
+            "ok": True,
+            "game_id": game_id,
+            "escalation": escalation,
+            "message": f"Escalation raised for game '{workitem.task_title}'",
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to raise escalation: {e}")
+
+
+
+def submit_game_status_report_tool(input: dict) -> dict:
+    """
+    Submit a status report for a game.
+
+    Required: game_id, stage, status, progress, next_action, actor
+    Optional: blocker, escalation_flag
+    """
+    try:
+        h = _harness
+        game_id = input.get("game_id", "").strip()
+        actor = input.get("actor", "PMO").strip()
+        stage = input.get("stage", "").strip()
+        status = input.get("status", "").strip()
+        progress = input.get("progress", "").strip()
+        next_action = input.get("next_action", "").strip()
+        blocker = input.get("blocker", "")
+        escalation_flag = input.get("escalation_flag", False)
+
+
+        if not game_id:
+            return _error_response("validation_error", "game_id is required")
+        if not all([stage, status, progress, next_action]):
+            return _error_response(
+                "validation_error",
+                "stage, status, progress, next_action are required"
+            )
+
+
+        try:
+            workitem = h["store"].load_workitem(game_id)
+        except ObjectNotFoundError:
+            return _error_response("task_not_found", f"Game '{game_id}' not found")
+
+
+        report = {
+            "game_id": game_id,
+            "stage": stage,
+            "status": status,
+            "progress": progress,
+            "blocker": blocker,
+            "escalation_flag": escalation_flag,
+            "next_action": next_action,
+            "submitted_by": actor,
+            "submitted_at": dt.utcnow().isoformat(),
+        }
+
+        game_fields = _load_game_fields(game_id)
+        game_fields.setdefault("status_reports", []).append(report)
+        _save_game_fields(game_id, game_fields)
+
+        h["journal"].append_raw(
+            project_id=workitem.project_id,
+            event_type="game_status_report_submitted",
+            event_summary=f"Status report for stage '{stage}' submitted by {actor} on game '{workitem.task_title}'",
+            actor=actor,
+            task_id=game_id,
+        )
+
+        return {
+            "ok": True,
+            "game_id": game_id,
+            "report": report,
+            "message": "Status report submitted",
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to submit status report: {e}")
+
+
+
+def approve_game_concept_tool(input: dict) -> dict:
+    """Record governance concept approval for a game."""
+    try:
+        h = _harness
+        game_id = input.get("game_id", "").strip()
+        actor = input.get("actor", "Governance").strip()
+        note = input.get("note", "")
+
+
+        if not game_id:
+            return _error_response("validation_error", "game_id is required")
+
+        try:
+            workitem = h["store"].load_workitem(game_id)
+        except ObjectNotFoundError:
+            return _error_response("task_not_found", f"Game '{game_id}' not found")
+
+
+        game_fields = _load_game_fields(game_id)
+        game_fields["concept_approved"] = True
+        game_fields["concept_approved_by"] = actor
+        game_fields["concept_approved_at"] = dt.utcnow().isoformat()
+        game_fields["concept_approval_note"] = note
+        _save_game_fields(game_id, game_fields)
+
+
+        h["journal"].append_raw(
+            project_id=workitem.project_id,
+            event_type="game_concept_approved",
+            event_summary=f"Concept approved for game '{workitem.task_title}' by {actor}",
+            actor=actor,
+            task_id=game_id,
+        )
+
+        return {
+            "ok": True,
+            "game_id": game_id,
+            "concept_approved": True,
+            "message": f"Concept approved for game '{workitem.task_title}'",
+        }
+    except Exception as e:
+        return _error_response("unknown", f"Failed to approve concept: {e}")
+
