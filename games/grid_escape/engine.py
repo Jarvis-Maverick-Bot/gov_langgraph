@@ -58,13 +58,20 @@ class Game:
             agent_pos=self.agent_pos if self._agent_moved else None
         )
 
+    def _signal_escaped(self) -> str:
+        """Signal that the agent escaped. Returns the ESCAPED message."""
+        from datetime import datetime
+        ts = datetime.now().isoformat(timespec="seconds")
+        tier = compute_tier(self.grid.grid_id, self.step_count)
+        return f"ESCAPED|{self.step_count}|{self.grid}|{ts}|{tier}"
+
     def move(self, direction: str) -> str:
         """Move agent in direction.
 
         Returns:
             'OK' on success — agent moved
             'BLOCKED' on wall/out-of-bounds — no state change
-            'ESCAPED|<steps>|<grid_id>|<timestamp>' when agent reaches EXIT
+            'ESCAPED|...' when agent reaches EXIT (includes tier for display)
             error message on unknown direction
         """
         if self.state != State.ACTIVE:
@@ -90,10 +97,7 @@ class Game:
         # Check for escape
         if cell.name == "EXIT":
             self.state = State.ESCAPED
-            from datetime import datetime
-            ts = datetime.now().isoformat(timespec="seconds")
-            tier = compute_tier(self.grid.grid_id, self.step_count)
-            return f"ESCAPED|{self.step_count}|{self.grid}|{ts}|{tier}"
+            return self._signal_escaped()
         return "OK"
 
     def status(self) -> str:

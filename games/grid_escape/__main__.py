@@ -27,8 +27,18 @@ def main() -> None:
         _run_batch(game)
 
 
+def _display_escaped(raw: str) -> str:
+    """Parse ESCAPED|<steps>|<grid>|<ts>|<tier> and show a friendly message."""
+    parts = raw.split("|")
+    if len(parts) == 5 and parts[0] == "ESCAPED":
+        tier = parts[4]
+        steps = parts[1]
+        return f"ESCAPED! {steps} steps \u2014 You achieved: {tier}"
+    return raw
+
+
 def _run_interactive(game: Game) -> None:
-    print("Grid Escape — type 'help' for commands")
+    print("Grid Escape \u2014 type 'help' for commands")
     print(game.look())
     print()
 
@@ -42,9 +52,22 @@ def _run_interactive(game: Game) -> None:
         if not line:
             continue
         output = _execute(game, line)
-        print(output)
+        if output.startswith("ESCAPED|"):
+            print(_display_escaped(output))
+        else:
+            print(output)
         if output == "quit":
             break
+
+
+def _display_escaped(raw: str) -> str:
+    """Parse ESCAPED|<steps>|<grid>|<ts>|<tier> and show a friendly message."""
+    parts = raw.split("|")
+    if len(parts) == 5 and parts[0] == "ESCAPED":
+        tier = parts[4]
+        steps = parts[1]
+        return f"ESCAPED! {steps} steps — You achieved: {tier}"
+    return raw
 
 
 def _run_batch(game: Game) -> None:
@@ -54,7 +77,10 @@ def _run_batch(game: Game) -> None:
         if not line:
             continue
         output = _execute(game, line)
-        print(output)
+        if output.startswith("ESCAPED|"):
+            print(_display_escaped(output))
+        else:
+            print(output)
         if output.startswith("ESCAPED") or game.state == State.QUIT:
             break
 

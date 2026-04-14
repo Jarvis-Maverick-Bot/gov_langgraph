@@ -94,10 +94,35 @@
       "blockers": [],
       "transitions": [],
       "delivery_package": null
+    },
+    "WI-003": {
+      "id": "WI-003",
+      "name": "Grid Escape Tier Display Enhancement",
+      "stage": "IN_REVIEW",
+      "created_at": "2026-04-14T09:51:20+00:00",
+      "updated_at": "2026-04-14T09:58:02+00:00",
+      "artifacts": [],
+      "validations": [
+        {
+          "id": "VAL-daee2755",
+          "item_id": "WI-003",
+          "result": "PASS",
+          "recorded_at": "2026-04-14T09:58:02+00:00"
+        }
+      ],
+      "blockers": [],
+      "transitions": [
+        {
+          "from": "BACKLOG",
+          "to": "IN_REVIEW",
+          "at": "2026-04-14T09:57:55+00:00"
+        }
+      ],
+      "delivery_package": null
     }
   },
   "sequences": {
-    "work_item": 2
+    "work_item": 3
   },
   "tasks": {
     "TASK-M3R2-001": {
