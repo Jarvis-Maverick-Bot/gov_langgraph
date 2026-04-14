@@ -1,13 +1,16 @@
 """
 V1.8 Governance UI — Thin visibility layer for V1.8 delivery.
 
-Adds V1.8-specific routes on top of existing PMO Web UI:
-  /v1.8/workflow   — active delivery items with status
-  /v1.8/queue      — V1.8 delivery queue
-  /v1.8/artifacts  — artifact/review visibility
-  /v1.8/approvals  — human approval surfaces
+Adds foundational PMO governance routes on top of existing PMO Web UI:
+  /governance/workflow   — active delivery items with status
+  /governance/queue      — V1.8 delivery queue
+  /governance/artifacts  — artifact/review visibility
+  /governance/approvals  — human approval surfaces
 
 Data served from PMO CLI state store (governance/pmo/data/).
+
+Note: Routes are foundational/global (not version-locked). V1.8-specific
+delivery context is embedded in response data, not route naming.
 
 Port: configurable via PMO_PORT env (default 8000)
 """
@@ -22,7 +25,7 @@ sys.path.insert(0, str(_ROOT))
 from fastapi import APIRouter
 from governance.pmo.pmo_cli import status, get_event_log, get_task_log
 
-router = APIRouter(prefix="/v1.8", tags=["V1.8 Delivery"])
+router = APIRouter(prefix="/governance", tags=["PMO Governance"])
 
 
 @router.get("/workflow")
