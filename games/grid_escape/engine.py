@@ -7,6 +7,7 @@ from typing import Optional
 
 from grid_escape.grid import Grid
 from grid_escape.grids import load_grid
+from grid_escape.scoring import compute_tier
 
 
 class State(Enum):
