@@ -20,7 +20,7 @@ Claw Studio agents are role-shaped sub-agents that accept structured inputs and 
 ### Planner
 
 **Status:** `approved` (2026-04-14T16:30 GMT+8); **persistent OpenClaw agent** (corrected 2026-04-14T19:38 GMT+8)
-**Agent workspace:** `C:\Users\John\.openclaw\agents\planner`
+**Agent workspace:** `C:\Users\John\.openclaw\agents\jarvis-planner`
 **Function coverage:** F7.1.1-F7.1.3, F7.4.1
 
 **Role:** Accepts a user story or work item description, decomposes it into a task plan with acceptance criteria per task. Feeds the TDD seat.
@@ -42,7 +42,7 @@ Claw Studio agents are role-shaped sub-agents that accept structured inputs and 
 ### TDD (Test-Driven Development)
 
 **Status:** `approved` (2026-04-14T16:30 GMT+8); **persistent OpenClaw agent** (corrected 2026-04-14T19:38 GMT+8)
-**Agent workspace:** `C:\Users\John\.openclaw\agents\tdd`
+**Agent workspace:** `C:\Users\John\.openclaw\agents\jarvis-tdd`
 **Function coverage:** F7.1.1-F7.1.3, F7.4.2
 
 **Role:** Receives a task specification from Planner, produces a failing test first, then minimal passing implementation. Proven cycle: failing test appears before passing code.
