@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 DATA_DIR = Path(__file__).parent / "data"
 STATE_FILE = DATA_DIR / "pmo_state.json"
+EVENT_LOG_FILE = DATA_DIR / "pmo_event_log.json"
 
 
 def _ensure_data_dir():
@@ -28,11 +29,91 @@ def _save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
+def _load_event_log():
+    _ensure_data_dir()
+    if EVENT_LOG_FILE.exists():
+        return json.loads(EVENT_LOG_FILE.read_text())
+    return []
+
+
+def _save_event_log(log):
+    _ensure_data_dir()
+    EVENT_LOG_FILE.write_text(json.dumps(log, indent=2))
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-# ─── Commands ────────────────────────────────────────────────────────────────
+# ─── Routing Rules ───────────────────────────────────────────────────────────
+
+DESTINATIONS = {"AGENT", "SUB_AGENT", "PMO", "NOVA", "ALEX"}
+
+ROUTING_RULES = {
+    "UNKNOWN_TOOL": "AGENT",
+    "BLOCKER_ESCALATION": "PMO",
+    "CLARIFICATION_NEEDED": "NOVA",
+    "TASK_COMPLETE": "PMO",
+    "TASK_FAILED": "PMO",
+    "DELIVERY_REQUEST": "PMO",
+}
+
+
+def route_event(event_json: str) -> dict:
+    """Accept a routing request, determine destination, forward, log."""
+    try:
+        event = json.loads(event_json)
+    except json.JSONDecodeError:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    event_type = event.get("type", "UNKNOWN")
+    context = event.get("context", {})
+    initiator = event.get("initiator", "unknown")
+    payload = event.get("payload", {})
+
+    event_id = f"EVT-{uuid.uuid4().hex[:8]}"
+    determined_destination = ROUTING_RULES.get(event_type, "PMO")
+
+    timestamp = _now()
+
+    # Build routing record
+    routing_record = {
+        "event_id": event_id,
+        "type": event_type,
+        "initiator": initiator,
+        "context": context,
+        "payload": payload,
+        "determined_destination": determined_destination,
+        "status": "FORWARDED",
+        "forwarded_at": timestamp,
+    }
+
+    # Log the event
+    log = _load_event_log()
+    log.append(routing_record)
+    _save_event_log(log)
+
+    return {
+        "ok": True,
+        "event_id": event_id,
+        "status": "FORWARDED",
+        "destination": determined_destination,
+        "at": timestamp,
+    }
+
+
+def get_event_log(event_id: str | None = None) -> dict:
+    """Return full event log or single event."""
+    log = _load_event_log()
+    if event_id:
+        for entry in log:
+            if entry["event_id"] == event_id:
+                return {"ok": True, "event": entry}
+        return {"ok": False, "error": f"Event not found: {event_id}"}
+    return {"ok": True, "events": log, "total": len(log)}
+
+
+# ─── PMO Commands ────────────────────────────────────────────────────────────
 
 
 def create_work_item(name: str) -> dict:
@@ -92,11 +173,7 @@ def request_transition(item_id: str, stage: str) -> dict:
     item = state["items"][item_id]
     old_stage = item["stage"]
     item["stage"] = stage
-    item["transitions"].append({
-        "from": old_stage,
-        "to": stage,
-        "at": _now(),
-    })
+    item["transitions"].append({"from": old_stage, "to": stage, "at": _now()})
     item["updated_at"] = _now()
     _save_state(state)
     return {"ok": True, "item_id": item_id, "from": old_stage, "to": stage}
@@ -180,6 +257,8 @@ COMMANDS = {
     "signal-blocker": (signal_blocker, "<item_id> <description>"),
     "package-delivery": (package_delivery, "<item_id>"),
     "status": (status, "[item_id]"),
+    "route-event": (route_event, "<json_string>"),
+    "event-log": (get_event_log, "[event_id]"),
 }
 
 
@@ -233,6 +312,13 @@ def main():
             sys.exit(1)
         result = fn(args[0])
     elif cmd == "status":
+        result = fn(args[0] if args else None)
+    elif cmd == "route-event":
+        if len(args) < 1:
+            print(f"EXPECTED: {usage}")
+            sys.exit(1)
+        result = fn(args[0])
+    elif cmd == "event-log":
         result = fn(args[0] if args else None)
 
     print(json.dumps(result, indent=2))
