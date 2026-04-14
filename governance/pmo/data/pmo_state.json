@@ -3,9 +3,9 @@
     "WI-001": {
       "id": "WI-001",
       "name": "Grid Escape M1",
-      "stage": "IN_PROGRESS",
+      "stage": "IN_REVIEW",
       "created_at": "2026-04-14T06:03:01+00:00",
-      "updated_at": "2026-04-14T06:03:02+00:00",
+      "updated_at": "2026-04-14T06:17:30+00:00",
       "artifacts": [
         {
           "id": "ART-c8a8b379",
@@ -13,6 +13,20 @@
           "path": "D:\\Projects\\gov_langgraph\\games\\grid_escape\\README.md",
           "name": "README.md",
           "submitted_at": "2026-04-14T06:03:01+00:00"
+        },
+        {
+          "id": "ART-96cea264",
+          "item_id": "WI-001",
+          "path": "D:\\Projects\\gov_langgraph\\games\\grid_escape.py",
+          "name": "grid_escape.py",
+          "submitted_at": "2026-04-14T06:15:22+00:00"
+        },
+        {
+          "id": "ART-2e60134f",
+          "item_id": "WI-001",
+          "path": "D:\\Projects\\gov_langgraph\\games\\grid_escape\\engine.py",
+          "name": "engine.py",
+          "submitted_at": "2026-04-14T06:15:26+00:00"
         }
       ],
       "validations": [
@@ -30,6 +44,13 @@
           "description": "Needs Nova review before delivery",
           "signaled_at": "2026-04-14T06:03:01+00:00",
           "resolved": false
+        },
+        {
+          "id": "BLK-69c5343d",
+          "item_id": "WI-001",
+          "description": "Awaiting Nova final review",
+          "signaled_at": "2026-04-14T06:15:13+00:00",
+          "resolved": false
         }
       ],
       "transitions": [
@@ -37,10 +58,15 @@
           "from": "BACKLOG",
           "to": "IN_PROGRESS",
           "at": "2026-04-14T06:03:01+00:00"
+        },
+        {
+          "from": "IN_PROGRESS",
+          "to": "IN_REVIEW",
+          "at": "2026-04-14T06:17:30+00:00"
         }
       ],
       "delivery_package": {
-        "id": "PKG-49f64563",
+        "id": "PKG-673b25b3",
         "item_id": "WI-001",
         "name": "Grid Escape M1",
         "stage": "IN_PROGRESS",
@@ -51,13 +77,26 @@
           "VAL-7605f0fe"
         ],
         "blockers": [
-          "BLK-e5a4d5ad"
+          "BLK-e5a4d5ad",
+          "BLK-69c5343d"
         ],
-        "created_at": "2026-04-14T06:03:02+00:00"
+        "created_at": "2026-04-14T06:15:17+00:00"
       }
+    },
+    "WI-002": {
+      "id": "WI-002",
+      "name": "Grid-Escape-M1",
+      "stage": "BACKLOG",
+      "created_at": "2026-04-14T06:14:12+00:00",
+      "updated_at": "2026-04-14T06:14:12+00:00",
+      "artifacts": [],
+      "validations": [],
+      "blockers": [],
+      "transitions": [],
+      "delivery_package": null
     }
   },
   "sequences": {
-    "work_item": 1
+    "work_item": 2
   }
 }
