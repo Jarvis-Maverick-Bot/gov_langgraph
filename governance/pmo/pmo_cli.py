@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import uuid
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -11,6 +12,7 @@ from datetime import datetime, timezone
 DATA_DIR = Path(__file__).parent / "data"
 STATE_FILE = DATA_DIR / "pmo_state.json"
 EVENT_LOG_FILE = DATA_DIR / "pmo_event_log.json"
+TASK_LOG_FILE = DATA_DIR / "pmo_task_log.json"
 
 
 def _ensure_data_dir():
@@ -41,8 +43,41 @@ def _save_event_log(log):
     EVENT_LOG_FILE.write_text(json.dumps(log, indent=2))
 
 
+def _load_task_log():
+    _ensure_data_dir()
+    if TASK_LOG_FILE.exists():
+        return json.loads(TASK_LOG_FILE.read_text())
+    return []
+
+
+def _save_task_log(log):
+    _ensure_data_dir()
+    TASK_LOG_FILE.write_text(json.dumps(log, indent=2))
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# ─── Authority: V1.8 Bounded Control ────────────────────────────────────────
+
+AUTHORIZED_ACTIONS = {
+    "launch-subagent": ["Jarvis", "Nova", "Alex"],
+    "pause-task":     ["Jarvis", "Nova", "Alex"],
+    "inspect-task":   ["Jarvis", "Nova", "Alex", "AGENT", "SUB_AGENT"],
+    "terminate-task":  ["Jarvis", "Nova", "Alex"],
+    "invoke-command": ["Jarvis", "Nova", "Alex"],
+}
+
+AUTHORIZED_AGENT_TYPES = {"TDD", "Planner", "CodeReviewer", "Security", "Docs", "DBExpert"}
+
+
+def _check_authority(action: str, actor: str) -> bool:
+    """Check if actor is authorized for action in V1.8 bounded scope."""
+    if actor in AUTHORIZED_ACTIONS.get(action, []):
+        return True
+    # V1.8: no autonomous expansion — unknown actors are FORBIDDEN
+    return False
 
 
 # ─── Routing Rules ───────────────────────────────────────────────────────────
@@ -73,10 +108,8 @@ def route_event(event_json: str) -> dict:
 
     event_id = f"EVT-{uuid.uuid4().hex[:8]}"
     determined_destination = ROUTING_RULES.get(event_type, "PMO")
-
     timestamp = _now()
 
-    # Build routing record
     routing_record = {
         "event_id": event_id,
         "type": event_type,
@@ -88,7 +121,6 @@ def route_event(event_json: str) -> dict:
         "forwarded_at": timestamp,
     }
 
-    # Log the event
     log = _load_event_log()
     log.append(routing_record)
     _save_event_log(log)
@@ -111,6 +143,134 @@ def get_event_log(event_id: str | None = None) -> dict:
                 return {"ok": True, "event": entry}
         return {"ok": False, "error": f"Event not found: {event_id}"}
     return {"ok": True, "events": log, "total": len(log)}
+
+
+# ─── Control Commands ─────────────────────────────────────────────────────────
+
+
+def _log_task_action(task_id: str, action: str, actor: str, result: dict):
+    log = _load_task_log()
+    log.append({
+        "task_id": task_id,
+        "action": action,
+        "actor": actor,
+        "result": result,
+        "at": _now(),
+    })
+    _save_task_log(log)
+
+
+def launch_subagent(task_id: str, agent_type: str, actor: str = "Jarvis") -> dict:
+    if not _check_authority("launch-subagent", actor):
+        return {"ok": False, "error": "FORBIDDEN", "reason": f"{actor} not authorized for launch-subagent in V1.8"}
+    if agent_type not in AUTHORIZED_AGENT_TYPES:
+        return {"ok": False, "error": f"Unknown agent type: {agent_type}. Valid: {', '.join(AUTHORIZED_AGENT_TYPES)}"}
+
+    state = _load_state()
+    if task_id in state.get("tasks", {}):
+        return {"ok": False, "error": f"Task already exists: {task_id}"}
+
+    if "tasks" not in state:
+        state["tasks"] = {}
+    state["tasks"][task_id] = {
+        "id": task_id,
+        "agent_type": agent_type,
+        "status": "RUNNING",
+        "created_at": _now(),
+        "updated_at": _now(),
+        "actions": [],
+    }
+    state["updated_at"] = _now()
+    _save_state(state)
+
+    result = {"ok": True, "task_id": task_id, "agent_type": agent_type, "status": "RUNNING"}
+    _log_task_action(task_id, "launch-subagent", actor, result)
+    return result
+
+
+def pause_task(task_id: str, actor: str = "Jarvis") -> dict:
+    if not _check_authority("pause-task", actor):
+        return {"ok": False, "error": "FORBIDDEN", "reason": f"{actor} not authorized for pause-task in V1.8"}
+    state = _load_state()
+    tasks = state.get("tasks", {})
+    if task_id not in tasks:
+        return {"ok": False, "error": f"Task not found: {task_id}"}
+    if tasks[task_id]["status"] == "TERMINATED":
+        return {"ok": False, "error": f"Cannot pause terminated task: {task_id}"}
+
+    tasks[task_id]["status"] = "PAUSED"
+    tasks[task_id]["updated_at"] = _now()
+    state["updated_at"] = _now()
+    _save_state(state)
+
+    result = {"ok": True, "task_id": task_id, "status": "PAUSED"}
+    _log_task_action(task_id, "pause-task", actor, result)
+    return result
+
+
+def inspect_task(task_id: str, actor: str = "Jarvis") -> dict:
+    if not _check_authority("inspect-task", actor):
+        return {"ok": False, "error": "FORBIDDEN", "reason": f"{actor} not authorized for inspect-task in V1.8"}
+    state = _load_state()
+    tasks = state.get("tasks", {})
+    if task_id not in tasks:
+        return {"ok": False, "error": f"Task not found: {task_id}"}
+    task = tasks[task_id]
+    result = {"ok": True, "task": task}
+    _log_task_action(task_id, "inspect-task", actor, result)
+    return result
+
+
+def terminate_task(task_id: str, actor: str = "Jarvis") -> dict:
+    if not _check_authority("terminate-task", actor):
+        return {"ok": False, "error": "FORBIDDEN", "reason": f"{actor} not authorized for terminate-task in V1.8"}
+    state = _load_state()
+    tasks = state.get("tasks", {})
+    if task_id not in tasks:
+        return {"ok": False, "error": f"Task not found: {task_id}"}
+    if tasks[task_id]["status"] == "TERMINATED":
+        return {"ok": False, "error": f"Task already terminated: {task_id}"}
+    tasks[task_id]["status"] = "TERMINATED"
+    tasks[task_id]["updated_at"] = _now()
+    state["updated_at"] = _now()
+    _save_state(state)
+
+    result = {"ok": True, "task_id": task_id, "status": "TERMINATED"}
+    _log_task_action(task_id, "terminate-task", actor, result)
+    return result
+
+
+def invoke_command(task_id: str, cmd: str, actor: str = "Jarvis") -> dict:
+    if not _check_authority("invoke-command", actor):
+        return {"ok": False, "error": "FORBIDDEN", "reason": f"{actor} not authorized for invoke-command in V1.8"}
+    state = _load_state()
+    tasks = state.get("tasks", {})
+    if task_id not in tasks:
+        return {"ok": False, "error": f"Task not found: {task_id}"}
+    task = tasks[task_id]
+    if task["status"] == "TERMINATED":
+        return {"ok": False, "error": f"Cannot invoke on terminated task: {task_id}"}
+
+    cmd_id = f"CMD-{uuid.uuid4().hex[:8]}"
+    cmd_record = {
+        "id": cmd_id,
+        "task_id": task_id,
+        "command": cmd,
+        "invoked_at": _now(),
+    }
+    task.setdefault("actions", []).append(cmd_record)
+    task["updated_at"] = _now()
+    state["updated_at"] = _now()
+    _save_state(state)
+
+    result = {"ok": True, "command_id": cmd_id, "task_id": task_id, "command": cmd}
+    _log_task_action(task_id, "invoke-command", actor, result)
+    return result
+
+
+def get_task_log() -> dict:
+    log = _load_task_log()
+    return {"ok": True, "log": log, "total": len(log)}
 
 
 # ─── PMO Commands ────────────────────────────────────────────────────────────
@@ -155,12 +315,7 @@ def submit_artifact(item_id: str, path: str) -> dict:
     state["items"][item_id]["artifacts"].append(artifact)
     state["items"][item_id]["updated_at"] = _now()
     _save_state(state)
-    return {
-        "ok": True,
-        "artifact_id": artifact["id"],
-        "item_id": item_id,
-        "path": artifact["path"],
-    }
+    return {"ok": True, "artifact_id": artifact["id"], "item_id": item_id, "path": artifact["path"]}
 
 
 def request_transition(item_id: str, stage: str) -> dict:
@@ -250,15 +405,21 @@ def status(item_id: str | None = None) -> dict:
 
 
 COMMANDS = {
-    "create-work-item": (create_work_item, "<name>"),
-    "submit-artifact": (submit_artifact, "<item_id> <path>"),
+    "create-work-item":  (create_work_item,  "<name>"),
+    "submit-artifact":    (submit_artifact,   "<item_id> <path>"),
     "request-transition": (request_transition, "<item_id> <stage>"),
-    "record-validation": (record_validation, "<item_id> <result>"),
-    "signal-blocker": (signal_blocker, "<item_id> <description>"),
-    "package-delivery": (package_delivery, "<item_id>"),
-    "status": (status, "[item_id]"),
-    "route-event": (route_event, "<json_string>"),
-    "event-log": (get_event_log, "[event_id]"),
+    "record-validation":  (record_validation,  "<item_id> <result>"),
+    "signal-blocker":     (signal_blocker,     "<item_id> <description>"),
+    "package-delivery":   (package_delivery,   "<item_id>"),
+    "status":             (status,             "[item_id]"),
+    "route-event":        (route_event,        "<json_string>"),
+    "event-log":          (get_event_log,       "[event_id]"),
+    "launch-subagent":    (launch_subagent,    "<task_id> <agent_type>"),
+    "pause-task":         (pause_task,          "<task_id>"),
+    "inspect-task":       (inspect_task,        "<task_id>"),
+    "terminate-task":      (terminate_task,      "<task_id>"),
+    "invoke-command":      (invoke_command,      "<task_id> <command>"),
+    "task-log":           (get_task_log,         ""),
 }
 
 
@@ -266,7 +427,20 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1] == "--help" or sys.argv[1] == "-h":
         print("PMO CLI — V1.8 Delivery Management")
         print()
-        for cmd, (_, usage) in COMMANDS.items():
+        print("=== Delivery Management ===")
+        for cmd in ["create-work-item", "submit-artifact", "request-transition",
+                    "record-validation", "signal-blocker", "package-delivery", "status"]:
+            fn, usage = COMMANDS[cmd]
+            print(f"  pmo {cmd} {usage}")
+        print()
+        print("=== Event Routing ===")
+        for cmd in ["route-event", "event-log"]:
+            fn, usage = COMMANDS[cmd]
+            print(f"  pmo {cmd} {usage}")
+        print()
+        print("=== Task Control ===")
+        for cmd in ["launch-subagent", "pause-task", "inspect-task", "terminate-task", "invoke-command", "task-log"]:
+            fn, usage = COMMANDS[cmd]
             print(f"  pmo {cmd} {usage}")
         print()
         print("  pmo --help   Show this message")
@@ -275,7 +449,7 @@ def main():
     cmd = sys.argv[1]
     if cmd not in COMMANDS:
         print(f"ERROR: Unknown command '{cmd}'")
-        print(f"Valid: {', '.join(COMMANDS)}")
+        print(f"Valid: {', '.join(sorted(COMMANDS))}")
         sys.exit(1)
 
     fn, usage = COMMANDS[cmd]
@@ -283,43 +457,58 @@ def main():
 
     if cmd == "create-work-item":
         if len(args) < 1:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0])
     elif cmd == "submit-artifact":
         if len(args) < 2:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0], args[1])
     elif cmd == "request-transition":
         if len(args) < 2:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0], args[1])
     elif cmd == "record-validation":
         if len(args) < 2:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0], args[1])
     elif cmd == "signal-blocker":
         if len(args) < 2:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0], " ".join(args[1:]))
     elif cmd == "package-delivery":
         if len(args) < 1:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0])
     elif cmd == "status":
         result = fn(args[0] if args else None)
     elif cmd == "route-event":
         if len(args) < 1:
-            print(f"EXPECTED: {usage}")
-            sys.exit(1)
+            print(f"EXPECTED: {usage}"); sys.exit(1)
         result = fn(args[0])
     elif cmd == "event-log":
         result = fn(args[0] if args else None)
+    elif cmd == "launch-subagent":
+        if len(args) < 2:
+            print(f"EXPECTED: {usage}"); sys.exit(1)
+        result = fn(args[0], args[1])
+    elif cmd == "pause-task":
+        if len(args) < 1:
+            print(f"EXPECTED: {usage}"); sys.exit(1)
+        result = fn(args[0])
+    elif cmd == "inspect-task":
+        if len(args) < 1:
+            print(f"EXPECTED: {usage}"); sys.exit(1)
+        result = fn(args[0])
+    elif cmd == "terminate-task":
+        if len(args) < 1:
+            print(f"EXPECTED: {usage}"); sys.exit(1)
+        result = fn(args[0])
+    elif cmd == "invoke-command":
+        if len(args) < 2:
+            print(f"EXPECTED: {usage}"); sys.exit(1)
+        result = fn(args[0], " ".join(args[1:]))
+    elif cmd == "task-log":
+        result = fn()
 
     print(json.dumps(result, indent=2))
 
