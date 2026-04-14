@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** 2026-04-14  
-**Status:** DRAFT — Pending Nova final sign-off
+**Status:** CLOSED — Nova final sign-off received (2026-04-14T18:53 GMT+8)
 
 ---
 
@@ -80,5 +80,5 @@ Each question must be answered "yes" with specific evidence before V1.8 can be f
 
 ---
 
-**Note:** "V1.8 closed" will be recorded here only after Nova provides final sign-off.  
+**V1.8 formally closed 2026-04-14T18:53 GMT+8 per Nova final approval.**  
 Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.8\V1_8_EXECUTION_PLAN.md` (v1.13)
