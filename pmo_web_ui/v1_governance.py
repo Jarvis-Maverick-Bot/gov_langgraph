@@ -1,4 +1,4 @@
-"""
+﻿"""
 PMO Governance UI — Thin visibility layer for PMO delivery management.
 
 Adds foundational PMO governance routes on top of existing PMO Web UI:
@@ -66,7 +66,7 @@ def workflow():
 
 @router.get("/queue")
 def queue():
-    """V1.8 delivery queue — items not yet delivered."""
+    """Delivery queue — items not yet delivered."""
     result = status()
     if not result.get("ok"):
         return {"items": [], "error": result.get("error", "unknown")}
@@ -137,7 +137,7 @@ def approvals():
 
 @router.get("/events")
 def events():
-    """V1.8 event log summary — last 20 events."""
+    """Event log summary — last 20 events."""
     log = get_event_log()
     events = log.get("events", [])[-20:]
     return {
@@ -149,7 +149,7 @@ def events():
 
 @router.get("/tasks")
 def tasks():
-    """V1.8 task control log — recent task actions."""
+    """Task control log — recent task actions."""
     log = get_task_log()
     return {
         "ok": True,
@@ -161,4 +161,4 @@ def tasks():
 @router.get("/health")
 def health():
     """Lightweight health check for the governance UI."""
-    return {"ok": True, "service": "v1.8-governance-ui", "status": "healthy"}
+    return {"ok": True, "service": "pmo-governance-ui", "status": "healthy"}

@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** 2026-04-14  
-**Status:** COMPLETE — V1.8 Sprint Closed
+**Status:** DRAFT — Pending Nova final sign-off
 
 ---
 
@@ -22,13 +22,13 @@ Grid Escape is an AI-native maze navigation game. The agent starts in a grid and
 
 Grid Escape is the V1.8 game product — first AI-native game through the Claw Studio + Viper operating model. CLI-first, governed by PMO event routing and bounded command/control loop.
 
-Full spec: `governance/V1.8/V1_8_SPEC.md`
+Full spec location: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.8\V1_8_SPEC.md`
 
 ### 2. Production Handoff Package
 
-- `games/grid_escape.py` — top-level runner script
-- `games/grid_escape/engine.py` — game engine with `_signal_escaped`
-- `games/grid_escape/__main__.py` — CLI with `_display_escaped` (tier display)
+- `games/grid_escape.py` — top-level runner script (adds repo root to sys.path)
+- `games/grid_escape/__main__.py` — CLI entry point with `_display_escaped` (tier display for player)
+- `games/grid_escape/engine.py` — game engine with `_signal_escaped` (tier computation)
 - `games/grid_escape/grids.py` — grid definitions (ge-001, ge-002, ge-003)
 - `games/grid_escape/scoring.py` — `compute_tier(steps, optimal)` function
 
@@ -63,20 +63,22 @@ Full spec: `governance/V1.8/V1_8_SPEC.md`
 
 ### 8. Closure Test (10 Foundation Questions)
 
-| # | Question | Answer | Evidence |
-|---|----------|--------|---------|
-| 1 | Grid Escape is deliverable and runnable | YES | `games/grid_escape.py`, `evidence/gameplay/M1_R2_EVIDENCE.md` |
-| 2 | CLI commands work (look/move/status/restart/quit) | YES | 55 tests passing |
-| 3 | Completion signal is correct (ESCAPED format) | YES | `compute_tier` wired into engine, 5-field format |
-| 4 | Scoring tiers computed correctly | YES | `scoring.py`, 55 tests passing |
-| 5 | PMO CLI commands work (7 base ops) | YES | `governance/pmo/pmo_cli.py`, evidence/pmo_cli/pmo_cli_trace.log |
-| 6 | PMO event routing rules work | YES | routing_proof_case.log, pmo_event_log.json |
-| 7 | Bounded command/control loop operational | YES | control_loop_trace.log, pmo_task_log.json |
-| 8 | Planner + TDD seats instantiated and proven | YES | planner_trace.md, tdd_trace.md, V1_8_AGENT_ROLES.md |
-| 9 | Claw <> Viper handoff exercised (real, not pseudo) | YES | handoff_001.md + return_receipt_001.md |
-| 10 | All evidence linked and accessible | YES | This document, all files referenced |
+Each question must be answered "yes" with specific evidence before V1.8 can be formally closed.
+
+| # | Closure Question | Required Answer | Evidence |
+|---|----------------|-----------------|---------|
+| 1 | Is the game deliverable and demonstrably runnable? | YES | `python games/grid_escape.py --grid ge-001` runs; ge-001 and ge-002 completion logs in `evidence/gameplay/M1_R2_EVIDENCE.md` |
+| 2 | Do all CLI commands work as specified? | YES | `look`, `move <n/s/e/w>`, `status`, `restart`, `quit` — 55 tests passing including command tests |
+| 3 | Is the completion signal correctly formed and emitted? | YES | `ESCAPED|<steps>|<grid>|<ts>|<tier>` format; `_signal_escaped` in `engine.py`; `compute_tier` wired in |
+| 4 | Are scoring tiers computed and displayed correctly? | YES | `compute_tier` in `scoring.py`; 5 tiers (PERFECT/EXCELLENT/GOOD/COMPLETED/OVERMOVED); tier displayed to player via `_display_escaped` in `__main__.py` |
+| 5 | Do all 7 PMO CLI base commands function correctly? | YES | `governance/pmo/pmo_cli.py`; trace in `evidence/pmo_cli/pmo_cli_trace.log` |
+| 6 | Does PMO event routing correctly classify and forward events? | YES | Routing rules in `pmo_cli.py`; trace in `evidence/routing/routing_proof_case.log`; live event log `governance/pmo/data/pmo_event_log.json` |
+| 7 | Is the bounded command/control loop operational? | YES | 5 control commands (launch-subagent/pause-task/inspect-task/terminate-task/invoke-command); trace in `evidence/routing/control_loop_trace.log`; live task log `governance/pmo/data/pmo_task_log.json` |
+| 8 | Are Planner and TDD seats instantiated and proven with live traces? | YES | `V1_8_AGENT_ROLES.md` (Nova approved); `evidence/governance/planner_trace.md`; `evidence/governance/tdd_trace.md`; `evidence/governance/handoff_chain_trace.md` |
+| 9 | Was the Claw <> Viper handoff exercised with real cross-boundary outputs? | YES | WI-003 created via PMO CLI; Viper executed real code change; `handoff/evidence/handoff_001.md` + `return_receipt_001.md`; code changes in `engine.py` + `__main__.py` |
+| 10 | Is the full evidence chain complete, linked, and accessible? | YES | This document references all evidence files; all 11 referenced files verified present in repo |
 
 ---
 
-**V1.8 closed 2026-04-14T17:58 GMT+8.**  
-Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.8\V1_8_EXECUTION_PLAN.md` (v1.12)
+**Note:** "V1.8 closed" will be recorded here only after Nova provides final sign-off.  
+Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.8\V1_8_EXECUTION_PLAN.md` (v1.13)

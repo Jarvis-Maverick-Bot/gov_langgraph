@@ -50,6 +50,21 @@
 
 ---
 
-## Delivery Channel
+## Operational Trace (Cross-Boundary Execution Chain)
 
-Work item WI-003 created via PMO CLI. Agent spawned via OpenClaw `sessions_spawn` with task context from this package. Return receipt will document actual outputs delivered.
+### Step 0 — PMO Work Item Created (17:51 GMT+8)
+```
+$ python governance/pmo/pmo_cli.py create-work-item "Grid Escape Tier Display Enhancement"
+{"ok": true, "item_id": "WI-003", "name": "Grid Escape Tier Display Enhancement", "stage": "BACKLOG"}
+```
+PMO state store confirms WI-003 created: `governance/pmo/data/pmo_state.json`
+
+### Step 1 — Handoff Package Prepared and Delivered to Viper (17:52 GMT+8)
+
+This document (HANDOVER-001) prepared by Claw Studio. Contains game definition, engineering constraints, success criteria for WI-003.
+
+**Delivery channel:** OpenClaw `sessions_spawn` with task context from this package
+**Executor:** Viper (Agent sub-agent)
+
+---
+

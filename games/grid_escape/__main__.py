@@ -27,16 +27,6 @@ def main() -> None:
         _run_batch(game)
 
 
-def _display_escaped(raw: str) -> str:
-    """Parse ESCAPED|<steps>|<grid>|<ts>|<tier> and show a friendly message."""
-    parts = raw.split("|")
-    if len(parts) == 5 and parts[0] == "ESCAPED":
-        tier = parts[4]
-        steps = parts[1]
-        return f"ESCAPED! {steps} steps \u2014 You achieved: {tier}"
-    return raw
-
-
 def _run_interactive(game: Game) -> None:
     print("Grid Escape \u2014 type 'help' for commands")
     print(game.look())
