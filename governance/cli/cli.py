@@ -12,6 +12,8 @@ from governance.cli.store import (
     create_work_item, submit_artifact, request_transition,
     record_validation, signal_blocker, package_delivery, get_item
 )
+from governance.cli.commands.queue_cmd import queue_list
+from governance.cli.commands.task_cmd import task_list
 from governance.routing.engine import route_event, get_event_log
 from governance.control.control import (
     launch_subagent, pause_task, resume_task, terminate_task,
@@ -27,6 +29,9 @@ COMMANDS = {
     "record-validation":   (record_validation,   "<item_id> <pass|fail>"),
     "signal-blocker":      (signal_blocker,      "<item_id> <description>"),
     "package-delivery":    (package_delivery,     "<item_id>"),
+    # Category B: Queue / Task Observation
+    "queue-list":          (queue_list,          ""),
+    "task-list":           (task_list,           ""),
     # Category C: Observation / Result
     "status":              (get_item,             "[item_id]"),
     # Category B: Execution / Dispatch
@@ -54,8 +59,8 @@ def main():
             fn, usage = COMMANDS[cmd]
             print(f"  governance {cmd} {usage}")
         print()
-        print("=== Category B: Execution / Dispatch ===")
-        for cmd in ["launch-subagent", "invoke-command", "pause-task", "resume-task", "terminate-task"]:
+        print("=== Category B: Queue / Task Observation ===")
+        for cmd in ["queue-list", "task-list"]:
             fn, usage = COMMANDS[cmd]
             print(f"  governance {cmd} {usage}")
         print()
@@ -136,6 +141,10 @@ def main():
             print(json.dumps({"error": f"EXPECTED: {usage}"})); sys.exit(1)
         result = fn(args[0])
     elif cmd == "task-log":
+        result = fn()
+    elif cmd == "queue-list":
+        result = fn()
+    elif cmd == "task-list":
         result = fn()
 
     print(json.dumps(result, indent=2))
