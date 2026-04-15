@@ -4,9 +4,10 @@
 
 import sys
 import json
+from pathlib import Path
 
-# Add parent to path for imports
-sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
+# Add repo root to path for imports (go up 3 levels from cli/cli.py to repo root)
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from governance.cli.store import (
     create_work_item, submit_artifact, request_transition,
