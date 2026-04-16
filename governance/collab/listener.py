@@ -10,20 +10,18 @@ import signal
 import sys
 from pathlib import Path
 
-# Add parent to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from nats import connect
-from governance.collab.envelope import CollabEnvelope, AckEnvelope
-from governance.collab.handler import SUBJECTS
-from governance.collab.handler import CollabHandler
-from governance.collab.state_store import CollabStateStore
+from .envelope import CollabEnvelope, AckEnvelope
+from .handler import SUBJECTS
+from .handler import CollabHandler
+from .state_store import CollabStateStore
 
-
-STATE_FILE = "D:/Projects/gov_langgraph/governance/data/collab_state.json"
-LOG_FILE = "D:/Projects/gov_langgraph/governance/data/collab_messages.jsonl"
-MESSAGES_LOG = "D:/Projects/gov_langgraph/nats_collab_listener.log"
-PID_FILE = "D:/Projects/gov_langgraph/nats_collab_listener.pid"
+# Paths relative to this file (collab/ subdir of governance/)
+_REPO_ROOT = Path(__file__).parent.parent.parent
+STATE_FILE = str(_REPO_ROOT / "governance" / "data" / "collab_state.json")
+LOG_FILE = str(_REPO_ROOT / "governance" / "data" / "collab_messages.jsonl")
+MESSAGES_LOG = str(_REPO_ROOT / "nats_collab_listener.log")
+PID_FILE = str(_REPO_ROOT / "nats_collab_listener.pid")
 
 
 class StandingListener:

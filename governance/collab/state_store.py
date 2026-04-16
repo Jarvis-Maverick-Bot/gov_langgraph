@@ -11,9 +11,11 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 
 
-STATE_FILE = "D:/Projects/gov_langgraph/governance/data/collab_state.json"
-MESSAGE_LOG_FILE = "D:/Projects/gov_langgraph/governance/data/collab_messages.jsonl"
-DATA_DIR = "D:/Projects/gov_langgraph/governance/data"
+# Compute paths relative to this file's location (collab/ subdir of governance/)
+_REPO_ROOT = Path(__file__).parent.parent.parent
+DATA_DIR = str(_REPO_ROOT / "governance" / "data")
+STATE_FILE = str(Path(DATA_DIR) / "collab_state.json")
+MESSAGE_LOG_FILE = str(Path(DATA_DIR) / "collab_messages.jsonl")
 
 
 @dataclass
