@@ -9,9 +9,9 @@ from pathlib import Path
 # Add repo root to path for imports (go up 3 levels from cli/cli.py to repo root)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from governance.cli.store import (
+from governance.workitem.store import (
     create_work_item, submit_artifact, request_transition,
-    record_validation, package_delivery, get_item
+    record_validation, signal_blocker, package_delivery, get_item
 )
 from governance.cli.commands.queue_cmd import queue_list
 from governance.cli.commands.task_cmd import task_list

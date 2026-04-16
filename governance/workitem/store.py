@@ -1,17 +1,21 @@
-# governance/cli/store.py
+# governance/workitem/store.py
 # Work-item governance state — separate from execution/task state
+#
+# Data location: governance/data/pmo_state.json (NOT governance/workitem/data/)
+# This aligns with actual data location verified by T9.2 inspect semantic fix.
 
 import json
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 
-DATA_DIR = Path(__file__).parent / "data"
-STATE_FILE = DATA_DIR / "pmo_state.json"
+# Data file lives at governance/data/pmo_state.json (repo-relative)
+_REPO_ROOT = Path(__file__).parent.parent.parent
+DATA_FILE = _REPO_ROOT / "governance" / "data" / "pmo_state.json"
 
 
 def _ensure_data_dir():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _now():
@@ -20,14 +24,14 @@ def _now():
 
 def _load_state():
     _ensure_data_dir()
-    if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text())
+    if DATA_FILE.exists():
+        return json.loads(DATA_FILE.read_text())
     return {"items": {}, "sequences": {"work_item": 0}}
 
 
 def _save_state(state):
     _ensure_data_dir()
-    STATE_FILE.write_text(json.dumps(state, indent=2))
+    DATA_FILE.write_text(json.dumps(state, indent=2))
 
 
 def create_work_item(name: str) -> dict:
@@ -153,3 +157,8 @@ def get_item(item_id: str | None = None) -> dict:
             return {"ok": False, "error": f"Item not found: {item_id}"}
         return {"ok": True, "item": state["items"][item_id]}
     return {"ok": True, "items": list(state["items"].values()), "total": len(state["items"])}
+
+
+def get_store():
+    """Alias for get_item(None) — returns full state."""
+    return get_item(None)
