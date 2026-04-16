@@ -55,18 +55,29 @@ python -m uvicorn pmo_web_ui.main:app --port 8000
 ## Running Tests
 
 ```bash
-# Smoke tests (Sprint 2R — 7 workflow tests)
-python run_s2_tests.py
+cd D:\Projects\gov_langgraph
 
-# Smoke tests (Sprint 4R — 9 PMO game surface tests)
-python run_s4_tests.py
+# Run all tests — no NATS server required
+# Local transport bypass is enabled via QUEUE_TRANSPORT=local
+# This allows test collection and execution without nats-py installed
 
-# E2E integration test (full 6-stage progression)
-python E2E_TEST.py
+set QUEUE_TRANSPORT=local
+python -m pytest tests/ -v
 
-# Full LangGraph pipeline test
-python LANGGRAPH_E2E_TEST.py
+# Running without the env var will require nats-py installed
+# and a running NATS server at nats://127.0.0.1:4222
 ```
+
+---
+
+## Runtime Environment Variables
+
+| Variable | Value | Effect |
+|---------|-------|--------|
+| `QUEUE_TRANSPORT` | `local` | Bypass NATS. Use local JSON cache + evidence log instead of NATS transport. For development, CI, and environments without a NATS server. |
+| `QUEUE_TRANSPORT` | _(not set)_ | Connect to NATS at `nats://127.0.0.1:4222`. Requires nats-py installed and a running NATS server. |
+
+**Note:** When `QUEUE_TRANSPORT=local` is set, the JSON cache + JSONL evidence log serve as the primary state and audit trail. NATS is completely bypassed for publish/subscribe/request operations.
 
 ---
 
