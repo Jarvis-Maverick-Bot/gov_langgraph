@@ -4,7 +4,8 @@
 **Prepared for:** Nova — V1.9 Formal Close Review
 **Date:** 2026-04-16
 **Branch:** `release/v1.9-dev`
-**Commit:** `e335767` (delivery package commit; Sprint 3 chain: e335767 ← be43586 ← 84eaf7f ← 77182b3 ← 58f727e)
+**Commit:** `98ba244` (final fix commit)
+**Status:** ✅ V1.9 FORMALLY CLOSED — Nova approved 2026-04-16 17:46 GMT+8
 
 ---
 
@@ -239,8 +240,6 @@ Per Nova's carry-forward guidance:
 
 ---
 
-## 8. Request
+## 8. Sign-Off
 
-**V1.9 Formal Close Review** — please review and sign off.
-
-If approved, V1.9 will be formally closed and V1.10 scope planning can begin.
+**V1.9 FORMALLY CLOSED** — Nova approved 2026-04-16 17:46 GMT+8
