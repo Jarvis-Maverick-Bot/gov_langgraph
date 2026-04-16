@@ -11,12 +11,13 @@ def inspect_item(item_id: str) -> dict:
     Universal inspection across all state domains.
 
     Checks in order:
-    1. Queue messages (governance/queue/data/messages.json)
-    2. Tasks (governance/task/data/tasks.json)
-    3. Work items (governance/cli/data/pmo_state.json)
-    4. Escalations (governance/escalation/data/)
+    1. Queue messages (governance/queue/data/messages.json → evidence/queue/)
+    2. Tasks (governance/data/pmo_task_store.json)
+    3. Work items (governance/data/pmo_state.json)
+    4. Escalations (governance/escalation/data/ → evidence/escalation/)
 
-    Returns domain, type, state, and linked IDs where applicable.
+    Returns domain, type, state, and source (live state vs evidence fallback)
+    where applicable.
     """
     # 1. Check queue messages
     msg = _inspect_queue(item_id)
@@ -57,26 +58,66 @@ def _inspect_queue(item_id: str) -> Optional[dict]:
     from pathlib import Path
     # 4 levels: commands/ -> cli/ -> governance/ -> repo root
     base = Path(__file__).parent.parent.parent.parent
-    data = _read_json(base / "governance" / "queue" / "data" / "messages.json")
-    if not data:
-        return None
-    # messages.json may be a list directly or wrapped in {"messages": [...]}
-    msgs = data if isinstance(data, list) else data.get("messages", [])
-    for msg in msgs:
-        if msg.get("message_id") == item_id or msg.get("id") == item_id:
-            return {
-                "ok": True,
-                "domain": "queue",
-                "type": "message",
-                "item_id": item_id,
-                "state": msg.get("state"),
-                "sender": msg.get("sender"),
-                "receiver": msg.get("receiver"),
-                "message_type": msg.get("type"),
-                "linked_response_id": msg.get("linked_response_id"),
-                "created_at": msg.get("created_at"),
-                "updated_at": msg.get("updated_at"),
-            }
+
+    # Check governance store first (if exists)
+    store_path = base / "governance" / "queue" / "data" / "messages.json"
+    if store_path.exists() and store_path.stat().st_size > 0:
+        try:
+            data = json.loads(store_path.read_text())
+            msgs = data if isinstance(data, list) else data.get("messages", [])
+            for msg in msgs:
+                if msg.get("message_id") == item_id or msg.get("id") == item_id:
+                    return {
+                        "ok": True,
+                        "domain": "queue",
+                        "type": "message",
+                        "item_id": item_id,
+                        "state": msg.get("state"),
+                        "sender": msg.get("sender"),
+                        "receiver": msg.get("receiver"),
+                        "message_type": msg.get("type"),
+                        "linked_response_id": msg.get("linked_response_id"),
+                        "created_at": msg.get("created_at"),
+                        "updated_at": msg.get("updated_at"),
+                        "source": "governance_store",
+                    }
+        except Exception:
+            pass
+
+    # Fall back to evidence log (append-only record of queue events)
+    evidence_path = base / "evidence" / "queue"
+    if evidence_path.exists():
+        for log_file in sorted(evidence_path.glob("*.jsonl")):
+            try:
+                content = log_file.read_text()
+                for line in content.split("\n"):
+                    if not line.strip():
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    after = event.get("after", {})
+                    msg_id = after.get("message_id") or after.get("id") or event.get("message_id")
+                    if msg_id == item_id:
+                        return {
+                            "ok": True,
+                            "domain": "queue",
+                            "type": "queue_event",
+                            "item_id": item_id,
+                            "state": after.get("state"),
+                            "sender": after.get("sender"),
+                            "receiver": after.get("receiver"),
+                            "message_type": after.get("type"),
+                            "linked_response_id": after.get("linked_response_id"),
+                            "created_at": after.get("created_at"),
+                            "updated_at": after.get("updated_at"),
+                            "source": "evidence_log",
+                            "note": "retrieved from append-only evidence; governance store empty",
+                        }
+            except Exception:
+                continue
+
     return None
 
 
@@ -84,24 +125,25 @@ def _inspect_task(item_id: str) -> Optional[dict]:
     from pathlib import Path
     # 4 levels: commands/ -> cli/ -> governance/ -> repo root
     base = Path(__file__).parent.parent.parent.parent
-    data = _read_json(base / "governance" / "task" / "data" / "tasks.json")
+    # Tasks stored in governance/data/pmo_task_store.json
+    data = _read_json(base / "governance" / "data" / "pmo_task_store.json")
     if not data:
         return None
-    # tasks.json may be a list directly or wrapped in {"tasks": [...]}
-    tasks = data if isinstance(data, list) else data.get("tasks", [])
-    for task in tasks:
-        if task.get("task_id") == item_id or task.get("id") == item_id:
-            return {
-                "ok": True,
-                "domain": "task",
-                "type": task.get("task_type", "task"),
-                "item_id": item_id,
-                "state": task.get("state"),
-                "assigned_to": task.get("assigned_to"),
-                "owned_by": task.get("owned_by"),
-                "created_at": task.get("created_at"),
-                "updated_at": task.get("updated_at"),
-            }
+    # pmo_task_store.json is a dict keyed by task_id, not a list
+    if item_id in data:
+        task = data[item_id]
+        return {
+            "ok": True,
+            "domain": "task",
+            "type": task.get("task_type", "task"),
+            "item_id": item_id,
+            "state": task.get("status"),
+            "assigned_to": task.get("executor"),
+            "owned_by": task.get("requested_by"),
+            "created_at": task.get("created_at"),
+            "updated_at": task.get("updated_at"),
+            "source": "governance_store",
+        }
     return None
 
 
@@ -109,7 +151,8 @@ def _inspect_workitem(item_id: str) -> Optional[dict]:
     from pathlib import Path
     # 4 levels: commands/ -> cli/ -> governance/ -> repo root
     base = Path(__file__).parent.parent.parent.parent
-    data = _read_json(base / "governance" / "cli" / "data" / "pmo_state.json")
+    # Work items stored in governance/data/pmo_state.json (not governance/cli/data/)
+    data = _read_json(base / "governance" / "data" / "pmo_state.json")
     if not data or "items" not in data:
         return None
     if item_id in data.get("items", {}):
@@ -130,6 +173,7 @@ def _inspect_workitem(item_id: str) -> Optional[dict]:
             "delivery_package": wi.get("delivery_package"),
             "created_at": wi.get("created_at"),
             "updated_at": wi.get("updated_at"),
+            "source": "governance_store",
         }
     return None
 
@@ -149,6 +193,7 @@ def _inspect_escalation(item_id: str) -> Optional[dict]:
             if rec.get("escalation_id") == item_id or rec.get("id") == item_id:
                 result = _build_escalation_result(rec, dec_data)
                 if result:
+                    result["source"] = "governance_store"
                     return result
 
     # Fall back to evidence log (append-only, most up-to-date)
@@ -172,6 +217,7 @@ def _inspect_escalation(item_id: str) -> Optional[dict]:
                         if event.get("event_type") == "escalation_create":
                             result = _build_escalation_result(after, dec_data)
                             if result:
+                                result["source"] = "evidence_log"
                                 return result
             except Exception:
                 continue
@@ -193,6 +239,7 @@ def _build_escalation_result(rec: dict, dec_data: Optional[dict]) -> Optional[di
         "reason": rec.get("reason"),
         "escalated_by": rec.get("escalated_by"),
         "escalated_at": rec.get("escalated_at"),
+        "source": "governance_store",  # default; caller overrides for evidence_log
     }
     # Check for linked decision
     if dec_data and "decisions" in dec_data:
