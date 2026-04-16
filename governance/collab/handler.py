@@ -156,8 +156,9 @@ class CollabHandler:
     
     def _event_for_message(self, envelope: CollabEnvelope, result: str) -> str:
         """Map message type + result to canonical event name."""
+        if envelope.message_type == 'open':
+            return 'collab_opened'
         mapping = {
-            ('open', _): 'collab_opened',
             ('review_request', 'review_started'): 'review_started',
             ('review_response', 'review_received'): 'review_received',
             ('decision_proposal', 'decision_proposal_received'): 'decision_proposed',
