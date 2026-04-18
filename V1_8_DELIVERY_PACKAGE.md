@@ -22,7 +22,7 @@ Grid Escape is an AI-native maze navigation game. The agent starts in a grid and
 
 Grid Escape is the V1.8 game product — first AI-native game through the Claw Studio + Viper operating model. CLI-first, governed by PMO event routing and bounded command/control loop.
 
-Full spec location: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.8\V1_8_SPEC.md`
+Full spec location: `\\192.168.31.124\Nova-Jarvis-Shared\working\nexus\V1.8\V1_8_SPEC.md`
 
 ### 2. Production Handoff Package
 
@@ -81,4 +81,4 @@ Each question must be answered "yes" with specific evidence before V1.8 can be f
 ---
 
 **V1.8 formally closed 2026-04-14T18:53 GMT+8 per Nova final approval.**  
-Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.8\V1_8_EXECUTION_PLAN.md` (v1.13)
+Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\nexus\V1.8\V1_8_EXECUTION_PLAN.md` (v1.13)

@@ -15,13 +15,13 @@ Node contract:
 
 from __future__ import annotations
 
-from gov_langgraph.langgraph_engine.state import GovernanceState
-from gov_langgraph.langgraph_engine.nodes.base import NodeCommand
-from gov_langgraph.langgraph_engine.runtime import get_runtime
-from gov_langgraph.langgraph_engine.executor import AgentExecutor
-from gov_langgraph.langgraph_engine.agent import make_viper_ba
-from gov_langgraph.platform_model import get_v1_pipeline_workflow, TaskStatus
-from gov_langgraph.platform_model.state_machine import StateMachine
+from nexus.langgraph_engine.state import GovernanceState
+from nexus.langgraph_engine.nodes.base import NodeCommand
+from nexus.langgraph_engine.runtime import get_runtime
+from nexus.langgraph_engine.executor import AgentExecutor
+from nexus.langgraph_engine.agent import make_viper_ba
+from nexus.platform_model import get_v1_pipeline_workflow, TaskStatus
+from nexus.platform_model.state_machine import StateMachine
 
 
 def viper_ba_node(state: GovernanceState) -> NodeCommand:

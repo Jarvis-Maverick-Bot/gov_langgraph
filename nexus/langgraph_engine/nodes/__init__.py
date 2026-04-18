@@ -4,7 +4,7 @@ langgraph_engine.nodes — Node registry for LangGraph graph
 Node registry maps stage names to node functions.
 """
 
-from gov_langgraph.langgraph_engine.nodes.base import NodeFunction
+from nexus.langgraph_engine.nodes.base import NodeFunction
 
 # Node registry: stage name -> node function
 NODE_REGISTRY: dict[str, NodeFunction] = {}

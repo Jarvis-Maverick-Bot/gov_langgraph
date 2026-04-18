@@ -1,5 +1,5 @@
 """
-gov_langgraph V1 E2E Test — Full Compiled Graph Pipeline
+nexus V1 E2E Test — Full Compiled Graph Pipeline
 
 Tests the full compiled LangGraph via pipeline.run_workitem() (not via tools).
 This verifies the complete BA→SA→DEV→QA→DONE pipeline with all governance artifacts.
@@ -22,18 +22,18 @@ Run:
 import sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
-from gov_langgraph.langgraph_engine import init_runtime
-from gov_langgraph.langgraph_engine.runtime import get_runtime
-from gov_langgraph.langgraph_engine.pipeline import run_workitem
-from gov_langgraph.langgraph_engine.executor import AgentExecutor
-from gov_langgraph.langgraph_engine.agent import make_viper_qa
-from gov_langgraph.platform_model import TaskState, TaskStatus, Project, WorkItem
+from nexus.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
+from nexus.langgraph_engine import init_runtime
+from nexus.langgraph_engine.runtime import get_runtime
+from nexus.langgraph_engine.pipeline import run_workitem
+from nexus.langgraph_engine.executor import AgentExecutor
+from nexus.langgraph_engine.agent import make_viper_qa
+from nexus.platform_model import TaskState, TaskStatus, Project, WorkItem
 
 
 def main():
     print("=" * 60)
-    print("gov_langgraph V1 — Full Pipeline E2E Test")
+    print("nexus V1 — Full Pipeline E2E Test")
     print("=" * 60)
 
     cfg = HarnessConfig()

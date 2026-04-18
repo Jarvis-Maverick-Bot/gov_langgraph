@@ -21,8 +21,8 @@ from .authority import Action, check_authority
 from .exceptions import InvalidTransitionError, StageNotFoundError
 
 if TYPE_CHECKING:
-    from gov_langgraph.harness.checkpointer import Checkpointer
-    from gov_langgraph.harness.events import EventJournal
+    from nexus.harness.checkpointer import Checkpointer
+    from nexus.harness.events import EventJournal
 
 
 # ---------------------------------------------------------------------------

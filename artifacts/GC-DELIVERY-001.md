@@ -14,11 +14,11 @@
 |-------|-------|
 | Artifact ID | GC-BUILD-001 |
 | Description | Grid Chase game engine + REST API + basic dashboard |
-| Location | `gov_langgraph/artifacts/GC-BUILD-001/` — `origin/v1.7`, commit `a1da32b` |
+| Location | `nexus/artifacts/GC-BUILD-001/` — `origin/v1.7`, commit `a1da32b` |
 | Format | Python source + HTML |
 | Delivery target | SPEC §1: "single-process local game engine, REST API, web dashboard" |
 
-*Host-local path (environment detail, optional): `D:/Projects/gov_langgraph/artifacts/GC-BUILD-001/`*
+*Host-local path (environment detail, optional): `D:/Projects/nexus/artifacts/GC-BUILD-001/`*
 
 ---
 

@@ -5,7 +5,7 @@ Holds shared harness dependencies for the graph execution session.
 Constructed once at session start, injected into nodes via context.
 
 Usage:
-    from gov_langgraph.langgraph_engine.runtime import init_runtime, get_runtime
+    from nexus.langgraph_engine.runtime import init_runtime, get_runtime
 
     # At session/startup:
     init_runtime()
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
+from nexus.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
 
 
 @dataclass

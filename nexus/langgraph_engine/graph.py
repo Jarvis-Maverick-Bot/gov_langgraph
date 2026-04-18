@@ -24,8 +24,8 @@ from __future__ import annotations
 
 from langgraph.graph import StateGraph, START, END
 
-from gov_langgraph.langgraph_engine.state import GovernanceState
-from gov_langgraph.platform_model import V1_PIPELINE_STAGES
+from nexus.langgraph_engine.state import GovernanceState
+from nexus.platform_model import V1_PIPELINE_STAGES
 
 
 # Valid stage sequence — imported from central V1 workflow source
@@ -55,11 +55,11 @@ def build_graph() -> StateGraph:
     graph = StateGraph(state_schema=GovernanceState)
 
     # Import nodes
-    from gov_langgraph.langgraph_engine.nodes.maverick import maverick_node
-    from gov_langgraph.langgraph_engine.nodes.viper_ba import viper_ba_node
-    from gov_langgraph.langgraph_engine.nodes.viper_sa import viper_sa_node
-    from gov_langgraph.langgraph_engine.nodes.viper_dev import viper_dev_node
-    from gov_langgraph.langgraph_engine.nodes.viper_qa import viper_qa_node
+    from nexus.langgraph_engine.nodes.maverick import maverick_node
+    from nexus.langgraph_engine.nodes.viper_ba import viper_ba_node
+    from nexus.langgraph_engine.nodes.viper_sa import viper_sa_node
+    from nexus.langgraph_engine.nodes.viper_dev import viper_dev_node
+    from nexus.langgraph_engine.nodes.viper_qa import viper_qa_node
 
     # Stage nodes mapped to graph node names
     stage_nodes = {

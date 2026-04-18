@@ -16,18 +16,18 @@ from __future__ import annotations
 
 from typing import Optional
 
-from gov_langgraph.platform_model import (
+from nexus.platform_model import (
     Handoff,
     HandoffStatus,
     ObjectNotFoundError,
     ValidationError as PlatformValidationError,
     WorkItem,
 )
-from gov_langgraph.platform_model.exceptions import ValidationError
+from nexus.platform_model.exceptions import ValidationError
 
-from gov_langgraph.harness.state_store import StateStore
-from gov_langgraph.harness.evidence import EvidenceStore, EvidenceType
-from gov_langgraph.harness.events import EventJournal
+from nexus.harness.state_store import StateStore
+from nexus.harness.evidence import EvidenceStore, EvidenceType
+from nexus.harness.events import EventJournal
 
 
 # ---------------------------------------------------------------------------

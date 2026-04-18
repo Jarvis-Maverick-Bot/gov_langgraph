@@ -1,4 +1,4 @@
-# gov_langgraph — V1.7 Build Candidate
+# nexus — V1.7 Build Candidate
 
 **Version:** V1.7 (`origin/v1.7`, tag `v1.7.0`)
 **Status:** ✅ Sprint 6R CLOSED — Nova ACCEPT WITH NOTES (2026-04-12 23:39 GMT+8)
@@ -8,7 +8,7 @@
 
 ## What is this?
 
-`gov_langgraph` is the THE ONE enterprise governance engine. It provides:
+`nexus` is the THE ONE enterprise governance engine. It provides:
 
 - **Platform Core** — objects, authority rules, state machine for BA→SA→DEV→QA pipeline
 - **Harness Layer** — persistence, checkpointing, event journaling, evidence storage
@@ -38,7 +38,7 @@
 ## Quick Start
 
 ```bash
-cd D:\Projects\gov_langgraph
+cd D:\Projects\nexus
 
 # Install dependencies
 pip install -r requirements.txt
@@ -73,7 +73,7 @@ python LANGGRAPH_E2E_TEST.py
 ## Project Structure
 
 ```
-gov_langgraph/
+nexus/
 ├── platform_model/              # Platform Core
 │   ├── objects.py              # Project, WorkItem, TaskState, Workflow, Handoff, Gate, Event
 │   ├── authority.py            # Role-based authority (Tier 1/2/3)
@@ -191,15 +191,15 @@ gov_langgraph/
 
 | Layer | Storage |
 |-------|---------|
-| Projects, WorkItems, TaskStates, Gates, Handoffs | `~/.gov_langgraph/state/*.json` |
-| Checkpoints | `~/.gov_langgraph/checkpoints/*.json` |
-| Event journal | `~/.gov_langgraph/events/*.jsonl` |
-| Evidence | `~/.gov_langgraph/state/evidence/*.jsonl` |
+| Projects, WorkItems, TaskStates, Gates, Handoffs | `~/.nexus/state/*.json` |
+| Checkpoints | `~/.nexus/checkpoints/*.json` |
+| Event journal | `~/.nexus/events/*.jsonl` |
+| Evidence | `~/.nexus/state/evidence/*.jsonl` |
 
 ---
 
 ## References
 
-- Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\gov_langgraph\V1.7\V1_7_EXECUTION_PLAN.md`
+- Execution plan: `\\192.168.31.124\Nova-Jarvis-Shared\working\nexus\V1.7\V1_7_EXECUTION_PLAN.md`
 - Sprint 6R log: `C:\Users\John\.openclaw\workspace\SPRINT_6R.md`
 - Artifact chain: GC-BRIEF-001 → GC-SPEC-001 → GC-HANDOVER-001 → GC-BUILD-001 → GC-VALIDATION-001 → GC-DELIVERY-001

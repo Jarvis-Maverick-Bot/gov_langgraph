@@ -14,8 +14,8 @@ Maverick's role:
 
 from __future__ import annotations
 
-from gov_langgraph.langgraph_engine.state import GovernanceState
-from gov_langgraph.langgraph_engine.nodes.base import NodeCommand
+from nexus.langgraph_engine.state import GovernanceState
+from nexus.langgraph_engine.nodes.base import NodeCommand
 
 
 def maverick_node(state: GovernanceState) -> NodeCommand:

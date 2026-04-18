@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional
 
-from gov_langgraph.platform_model import Event as PlatformEvent
+from nexus.platform_model import Event as PlatformEvent
 
 
 # ---------------------------------------------------------------------------

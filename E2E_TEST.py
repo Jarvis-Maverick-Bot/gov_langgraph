@@ -1,5 +1,5 @@
 """
-gov_langgraph E2E test — End-to-end pipeline test
+nexus E2E test — End-to-end pipeline test
 
 Tests the full pipeline:
 1. Create project via tool
@@ -18,14 +18,14 @@ Run:
 import sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from gov_langgraph.openclaw_integration import Coordinator
-from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal
-from gov_langgraph.platform_model import get_v1_pipeline_workflow, V1_PIPELINE_STAGES
+from nexus.openclaw_integration import Coordinator
+from nexus.harness import HarnessConfig, StateStore, Checkpointer, EventJournal
+from nexus.platform_model import get_v1_pipeline_workflow, V1_PIPELINE_STAGES
 
 
 def main():
     print("=" * 60)
-    print("gov_langgraph V1 End-to-End Test")
+    print("nexus V1 End-to-End Test")
     print("=" * 60)
 
     cfg = HarnessConfig()

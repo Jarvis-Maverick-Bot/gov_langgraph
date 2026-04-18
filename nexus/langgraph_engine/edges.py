@@ -85,6 +85,6 @@ GOVERNANCE RULES
 from __future__ import annotations
 
 # Re-export router functions for documentation
-from gov_langgraph.langgraph_engine.graph import _maverick_router, _stage_router
+from nexus.langgraph_engine.graph import _maverick_router, _stage_router
 
 __all__ = ["_maverick_router", "_stage_router"]

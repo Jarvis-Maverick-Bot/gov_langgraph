@@ -34,8 +34,8 @@ httpx>=0.25.0  # for async HTTP calls (used by API client)
 # ── PMO Runtime Modules ──
 # The following packages are required to boot pmo_web_ui.main:
 #   - pmo_web_ui.main          (FastAPI app)
-#   - gov_langgraph.openclaw_integration.tools
-#   - gov_langgraph.langgraph_engine
+#   - nexus.openclaw_integration.tools
+#   - nexus.langgraph_engine
 #
 # Full list from pip freeze on working environment:
 #   langgraph==1.1.6

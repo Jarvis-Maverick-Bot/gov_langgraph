@@ -16,9 +16,9 @@ from pathlib import Path
 # Default Paths
 # ---------------------------------------------------------------------------
 
-DEFAULT_STATE_DIR = Path("~/.gov_langgraph/state").expanduser()
-DEFAULT_EVENT_DIR = Path("~/.gov_langgraph/events").expanduser()
-DEFAULT_CHECKPOINT_DIR = Path("~/.gov_langgraph/checkpoints").expanduser()
+DEFAULT_STATE_DIR = Path("~/.nexus/state").expanduser()
+DEFAULT_EVENT_DIR = Path("~/.nexus/events").expanduser()
+DEFAULT_CHECKPOINT_DIR = Path("~/.nexus/checkpoints").expanduser()
 
 
 # ---------------------------------------------------------------------------

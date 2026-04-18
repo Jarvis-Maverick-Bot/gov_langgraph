@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from gov_langgraph.langgraph_engine.graph import build_graph
-from gov_langgraph.langgraph_engine.state import GovernanceState
-from gov_langgraph.langgraph_engine.runtime import init_runtime, get_runtime
+from nexus.langgraph_engine.graph import build_graph
+from nexus.langgraph_engine.state import GovernanceState
+from nexus.langgraph_engine.runtime import init_runtime, get_runtime
 
 
 def compile():

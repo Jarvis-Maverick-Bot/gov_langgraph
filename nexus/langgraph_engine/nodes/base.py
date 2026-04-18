@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from gov_langgraph.langgraph_engine.state import GovernanceState
+from nexus.langgraph_engine.state import GovernanceState
 
 
 # Node return type — a command dict that LangGraph uses to update state

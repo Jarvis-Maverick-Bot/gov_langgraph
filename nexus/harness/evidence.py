@@ -206,7 +206,7 @@ class EvidenceStore:
 
     def append_handoff(
         self,
-        handoff: "gov_langgraph.platform_model.handoff_schema.HandoffDocument",
+        handoff: "nexus.platform_model.handoff_schema.HandoffDocument",
         actor_role: str = "",
     ) -> EvidenceRecord:
         """
@@ -235,14 +235,14 @@ class EvidenceStore:
         self.append(record)
         return record
 
-    def get_handoffs_for_task(self, task_id: str) -> list["gov_langgraph.platform_model.handoff_schema.HandoffDocument"]:
+    def get_handoffs_for_task(self, task_id: str) -> list["nexus.platform_model.handoff_schema.HandoffDocument"]:
         """
         Retrieve all handoff documents for a task.
 
         Returns handoffs ordered by timestamp (oldest first).
         Next stage uses this to read prior stage handoff before starting.
         """
-        from gov_langgraph.platform_model.handoff_schema import HandoffDocument
+        from nexus.platform_model.handoff_schema import HandoffDocument
         records = self.get_for_task(task_id)
         handoffs = []
         for record in records:

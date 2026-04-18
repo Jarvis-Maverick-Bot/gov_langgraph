@@ -2,9 +2,9 @@
 Sprint 1 Phase 1: Intake Foundation — Quick Verification Test
 """
 import sys
-sys.path.insert(0, "D:/Projects/gov_langgraph")
+sys.path.insert(0, "D:/Projects/nexus")
 
-from gov_langgraph.platform_model.objects import Project, ProjectStatus
+from nexus.platform_model.objects import Project, ProjectStatus
 
 print("=" * 60)
 print("Sprint 1 Phase 1 — Intake Foundation Tests")

@@ -20,8 +20,8 @@ import argparse
 import sys
 from typing import Optional
 
-from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
-from gov_langgraph.platform_model import Project, WorkItem, TaskState, Workflow, V1_PIPELINE_STAGES
+from nexus.harness import HarnessConfig, StateStore, Checkpointer, EventJournal, EvidenceStore
+from nexus.platform_model import Project, WorkItem, TaskState, Workflow, V1_PIPELINE_STAGES
 
 
 # ---------------------------------------------------------------------------

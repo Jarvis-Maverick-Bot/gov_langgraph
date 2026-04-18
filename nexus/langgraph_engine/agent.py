@@ -21,8 +21,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
 
-from gov_langgraph.platform_model import Role, V1_PIPELINE_STAGES
-from gov_langgraph.platform_model.handoff_schema import HandoffDocument
+from nexus.platform_model import Role, V1_PIPELINE_STAGES
+from nexus.platform_model.handoff_schema import HandoffDocument
 
 
 class AgentStatus(Enum):

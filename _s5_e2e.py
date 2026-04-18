@@ -1,12 +1,12 @@
 """Sprint 5 E2E test script"""
-from gov_langgraph.openclaw_integration import (
+from nexus.openclaw_integration import (
     init_harness, create_project_tool, kickoff_task_tool, list_tasks_tool,
     submit_handoff_tool, upsert_artifact_tool, get_gate_panel_tool,
     create_acceptance_package_tool, get_acceptance_package_tool,
     approve_acceptance_tool, reject_acceptance_tool,
     get_project_tool,
 )
-from gov_langgraph.openclaw_integration.tools import get_advisories_tool, raise_advisory_tool
+from nexus.openclaw_integration.tools import get_advisories_tool, raise_advisory_tool
 
 def test_happy_path():
     print("=== HAPPY PATH E2E ===")

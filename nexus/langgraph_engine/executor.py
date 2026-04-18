@@ -25,14 +25,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from gov_langgraph.platform_model import (
+from nexus.platform_model import (
     check_authority, Action, Role,
     HandoffDocument, Event,
 )
-from gov_langgraph.langgraph_engine.agent import (
+from nexus.langgraph_engine.agent import (
     RoleShapedAgent, AgentStatus,
 )
-from gov_langgraph.langgraph_engine.runtime import get_runtime
+from nexus.langgraph_engine.runtime import get_runtime
 
 
 class AgentExecutor:

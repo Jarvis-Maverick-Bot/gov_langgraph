@@ -16,12 +16,12 @@ Node contract:
 
 from __future__ import annotations
 
-from gov_langgraph.langgraph_engine.state import GovernanceState
-from gov_langgraph.langgraph_engine.nodes.base import NodeCommand
-from gov_langgraph.langgraph_engine.runtime import get_runtime
-from gov_langgraph.langgraph_engine.agent import make_viper_qa
-from gov_langgraph.langgraph_engine.executor import AgentExecutor
-from gov_langgraph.platform_model import TaskStatus
+from nexus.langgraph_engine.state import GovernanceState
+from nexus.langgraph_engine.nodes.base import NodeCommand
+from nexus.langgraph_engine.runtime import get_runtime
+from nexus.langgraph_engine.agent import make_viper_qa
+from nexus.langgraph_engine.executor import AgentExecutor
+from nexus.platform_model import TaskStatus
 
 
 def viper_qa_node(state: GovernanceState) -> NodeCommand:

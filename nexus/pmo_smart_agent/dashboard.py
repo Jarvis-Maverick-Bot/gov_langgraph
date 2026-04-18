@@ -7,8 +7,8 @@ Blocked workitems highlighted.
 
 from __future__ import annotations
 
-from gov_langgraph.harness import HarnessConfig, StateStore
-from gov_langgraph.platform_model import Project, V1_PIPELINE_STAGES
+from nexus.harness import HarnessConfig, StateStore
+from nexus.platform_model import Project, V1_PIPELINE_STAGES
 
 
 def get_pipeline_view(project_id: str) -> dict:

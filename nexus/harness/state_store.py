@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from gov_langgraph.platform_model import (
+from nexus.platform_model import (
     Project,
     WorkItem,
     TaskState,
@@ -244,7 +244,7 @@ class StateStore:
 
 import enum
 
-from gov_langgraph.platform_model.objects import (
+from nexus.platform_model.objects import (
     ProjectStatus,
     TaskStatus,
     HandoffStatus,
@@ -259,7 +259,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 
 def _dict_to_project(data: dict) -> Project:
-    from gov_langgraph.platform_model import (
+    from nexus.platform_model import (
         Artifact, ArtifactType, AcceptancePackage, PrereqArtifact,
         AdvisorySignal, AdvisoryType,
         Blocker, BlockerSeverity,
@@ -462,7 +462,7 @@ def _dict_to_workflow(data: dict) -> Workflow:
 
 
 def _dict_to_gate(data: dict) -> Gate:
-    from gov_langgraph.platform_model import GateDecision  # avoid circular
+    from nexus.platform_model import GateDecision  # avoid circular
     return Gate(
         task_id=data["task_id"],
         stage=data["stage"],
@@ -476,7 +476,7 @@ def _dict_to_gate(data: dict) -> Gate:
 
 
 def _dict_to_handoff(data: dict) -> Handoff:
-    from gov_langgraph.platform_model import HandoffStatus  # avoid circular
+    from nexus.platform_model import HandoffStatus  # avoid circular
     return Handoff(
         task_id=data["task_id"],
         from_stage=data["from_stage"],

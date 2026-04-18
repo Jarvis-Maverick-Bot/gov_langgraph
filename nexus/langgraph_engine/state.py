@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from gov_langgraph.platform_model import WorkItem, TaskState, Handoff, Gate, Event
+from nexus.platform_model import WorkItem, TaskState, Handoff, Gate, Event
 
 
 @dataclass

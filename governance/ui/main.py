@@ -1,6 +1,6 @@
 """
 PMO Web UI — FastAPI server
-Serves the PMO dashboard and proxies gov_langgraph tool calls.
+Serves the PMO dashboard and proxies nexus tool calls.
 
 Port: configurable via PMO_PORT env (default 8000)
 """
@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from gov_langgraph.openclaw_integration.tools import (
+from nexus.openclaw_integration.tools import (
     init_harness,
     get_status_tool,
     get_gate_panel_tool,

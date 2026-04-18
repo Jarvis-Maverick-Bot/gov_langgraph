@@ -40,7 +40,7 @@ python governance/pmo/pmo_cli.py submit-artifact WI-001 games/grid_escape/README
   "ok": true,
   "artifact_id": "ART-c8a8b379",
   "item_id": "WI-001",
-  "path": "D:\\Projects\\gov_langgraph\\games\\grid_escape\\README.md"
+  "path": "D:\\Projects\\nexus\\games\\grid_escape\\README.md"
 }
 ```
 

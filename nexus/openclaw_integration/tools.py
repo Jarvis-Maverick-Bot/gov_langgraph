@@ -1,5 +1,5 @@
 """
-openclaw_integration.tools — OpenClaw tool definitions for gov_langgraph
+openclaw_integration.tools — OpenClaw tool definitions for nexus
 
 Each @tool function:
 - Takes structured dict input
@@ -16,8 +16,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from gov_langgraph.harness import HarnessConfig, StateStore, Checkpointer, EventJournal
-from gov_langgraph.platform_model import (
+from nexus.harness import HarnessConfig, StateStore, Checkpointer, EventJournal
+from nexus.platform_model import (
     Project, WorkItem, TaskState, Workflow,
     Role, TaskStatus, ProjectStatus, Handoff, Gate, GateDecision, Event,
     Artifact, ArtifactType, AcceptancePackage,
@@ -28,10 +28,10 @@ from gov_langgraph.platform_model import (
     KickoffDecisionStatus, KickoffDecision,
     get_v1_pipeline_workflow,
 )
-from gov_langgraph.platform_model.state_machine import StateMachine
-from gov_langgraph.platform_model.authority import Action, check_authority
-from gov_langgraph.platform_model.exceptions import ObjectNotFoundError, PlatformException
-from gov_langgraph.langgraph_engine import init_runtime, run_workitem as langgraph_run_workitem
+from nexus.platform_model.state_machine import StateMachine
+from nexus.platform_model.authority import Action, check_authority
+from nexus.platform_model.exceptions import ObjectNotFoundError, PlatformException
+from nexus.langgraph_engine import init_runtime, run_workitem as langgraph_run_workitem
 
 
 # Terminal stages — tasks in these states have no actionable gates
@@ -722,7 +722,7 @@ def advance_stage_tool(input: dict) -> dict:
         project_id = workitem.project_id
 
         # Use StateMachine directly for bounded one-stage advance
-        from gov_langgraph.langgraph_engine.runtime import get_runtime
+        from nexus.langgraph_engine.runtime import get_runtime
         rt = get_runtime()
 
         sm = StateMachine(
@@ -2077,7 +2077,7 @@ def _get_maverick_spawner():
     """Get or create MaverickSpawner singleton."""
     global _maverick_spawner
     if _maverick_spawner is None:
-        from gov_langgraph.openclaw_integration.maverick_spawner import MaverickSpawner
+        from nexus.openclaw_integration.maverick_spawner import MaverickSpawner
         _maverick_spawner = MaverickSpawner()
     return _maverick_spawner
 
