@@ -99,6 +99,12 @@ class StandingListener:
         """Handle inbound command message."""
         try:
             envelope = CollabEnvelope.from_json(msg.data)
+
+            # Selective receive: only process messages addressed to me
+            if envelope.to != self.my_id:
+                self._log(f"SKIP [{envelope.collab_id}] to={envelope.to} (not me, ignoring)")
+                return
+
             self._log(f"CMD [{envelope.collab_id}] {envelope.message_type}: {envelope.summary}")
 
             success = await self.handler.handle_inbound(envelope)
@@ -114,6 +120,12 @@ class StandingListener:
         """Handle inbound ACK message."""
         try:
             ack = AckEnvelope.from_json(msg.data)
+
+            # Selective receive: only process ACKs addressed to me
+            if ack.to != self.my_id:
+                self._log(f"SKIP ACK [{ack.collab_id}] to={ack.to} (not me, ignoring)")
+                return
+
             self._log(f"ACK [{ack.collab_id}] for={ack.ack_for} status={ack.status}")
 
             # Complete pending future if any
