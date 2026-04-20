@@ -156,16 +156,21 @@ class CollabHandler:
     
     def _event_for_message(self, envelope: CollabEnvelope, result: str) -> str:
         """Map message type + result to canonical event name."""
-        mapping = {
-            ('open', _): 'collab_opened',
-            ('review_request', 'review_started'): 'review_started',
-            ('review_response', 'review_received'): 'review_received',
-            ('decision_proposal', 'decision_proposal_received'): 'decision_proposed',
-            ('complete', 'collab_completed'): 'collab_closed',
-            ('exit', 'collab_exited'): 'collab_closed',
-        }
-        key = (envelope.message_type, result)
-        return mapping.get(key, f'event_{result}')
+        msg_type = envelope.message_type
+        if msg_type == 'open':
+            return 'collab_opened'
+        elif msg_type == 'review_request' and result == 'review_started':
+            return 'review_started'
+        elif msg_type == 'review_response' and result == 'review_received':
+            return 'review_received'
+        elif msg_type == 'decision_proposal' and result == 'decision_proposal_received':
+            return 'decision_proposed'
+        elif msg_type == 'complete' and result == 'collab_completed':
+            return 'collab_closed'
+        elif msg_type == 'exit' and result == 'collab_exited':
+            return 'collab_closed'
+        else:
+            return f'event_{result}'
     
     async def send_command(self, collab_id: str, to: str, message_type: str,
                            summary: str = "", payload: Optional[dict] = None,
