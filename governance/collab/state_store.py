@@ -45,6 +45,7 @@ class CollabState:
     pending_action: str = ""
     created_at: str = ""
     updated_at: str = ""
+    last_processed_by: str = ""   # written by daemon on each command/ack
 
     def to_dict(self) -> dict:
         return asdict(self)

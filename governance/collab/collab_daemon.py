@@ -7,8 +7,9 @@ import asyncio
 import json
 import os
 import signal
-import sys
 import socket
+import subprocess
+import sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -79,37 +80,83 @@ def _load_config() -> dict:
     return {}
 
 
+def _is_process_running(pid: int) -> bool:
+    """Cross-platform process existence check."""
+    import subprocess
+    if sys.platform.startswith('win'):
+        result = subprocess.run(
+            ['tasklist', '/FI', f'PID eq {pid}'],
+            capture_output=True, text=True
+        )
+        return len(result.stdout.splitlines()) > 1
+    else:
+        # Unix: signal 0 — no actual signal sent, just checks existence
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+
 def _get_instance_id() -> str:
-    """Return: hostname:pid:start_time."""
+    """Return: hostname:pid:start_time (UTC epoch)."""
     return f"{socket.gethostname()}:{os.getpid()}:{int(datetime.now(timezone.utc).timestamp())}"
+
+
+def _read_pid_metadata() -> dict:
+    """Read structured PID metadata from PID file, or empty dict."""
+    try:
+        with open(_paths()['pid'], 'r', encoding='utf-8') as f:
+            raw = f.read().strip()
+        # Legacy format: raw PID number string — convert to structured metadata
+        try:
+            pid = int(raw)
+            return {'pid': pid}
+        except ValueError:
+            # JSON format — parse as dict
+            return json.loads(raw)
+    except Exception:
+        return {}
+
+
+
+def _write_pid_metadata(metadata: dict):
+    """Write structured PID metadata to PID file."""
+    with open(_paths()['pid'], 'w', encoding='utf-8') as f:
+        json.dump(metadata, f)
 
 
 def _acquire_pid() -> bool:
     """
-    Try to acquire PID file.
+    Try to acquire PID file (singleton guard).
     Returns True if acquired, False if another instance is already running.
+    Cross-platform: tasklist on Windows, kill(pid, 0) on Unix.
     """
     pid_path = _paths()['pid']
     if os.path.exists(pid_path):
         try:
-            old_pid = int(open(pid_path, 'r').read().strip())
-            # Check if process is actually running (Windows-compatible)
-            import subprocess
-            result = subprocess.run(
-                ['tasklist', '/FI', f'PID eq {old_pid}'],
-                capture_output=True, text=True
-            )
-            if len(result.stdout.splitlines()) > 1:
+            meta = _read_pid_metadata()
+            old_pid = meta.get('pid')
+            if old_pid is None:
+                # Legacy format: raw PID number — recover
+                old_pid = int(open(pid_path, 'r').read().strip())
+
+            if _is_process_running(old_pid):
                 _log("FATAL", f"Another daemon instance is running (pid={old_pid}). Exiting.")
                 return False
             else:
                 _log("WARN", f"Stale PID file found (pid={old_pid}). Removing.")
-        except (ValueError, OSError, subprocess.SubprocessError):
+        except (ValueError, OSError, AttributeError):
             pass
         os.remove(pid_path)
 
-    with open(pid_path, 'w') as f:
-        f.write(str(os.getpid()))
+    meta = {
+        'pid': os.getpid(),
+        'hostname': socket.gethostname(),
+        'start_epoch': int(datetime.now(timezone.utc).timestamp()),
+        'instance_id': _get_instance_id(),
+    }
+    _write_pid_metadata(meta)
     _log("INFO", f"PID file acquired: {os.getpid()}")
     return True
 
@@ -120,6 +167,18 @@ def _release_pid():
         os.remove(_paths()['pid'])
     except OSError:
         pass
+
+
+def _stop_remote_daemon(pid: int):
+    """
+    Platform-specific stop of a remote daemon process.
+    SIGTERM on Unix; SIGINT (Ctrl+C equivalent) on Windows.
+    """
+    if sys.platform.startswith('win'):
+        import subprocess
+        subprocess.run(['taskkill', '/PID', str(pid), '/F'])
+    else:
+        os.kill(pid, signal.SIGTERM)
 
 
 class CollabDaemon:
@@ -264,10 +323,19 @@ class CollabDaemon:
 
             self._log("CMD", f"[{envelope.collab_id}] {envelope.message_type}: {envelope.summary}")
 
-            # Update state: last_processed_by this instance
+            # Ensure collab exists before writing daemon-owned fields
+            # (update_collab returns None if collab not yet created)
+            collab = self.store.get_or_create_collab(
+                envelope.collab_id,
+                opened_by=envelope.from_,
+                artifact_type=getattr(envelope, 'artifact_type', None) or '',
+                artifact_path=getattr(envelope, 'artifact_path', None) or '',
+            )
+            # Write daemon-owned fields: instance identity tracking
             self.store.update_collab(envelope.collab_id,
                 last_message_id=envelope.message_id,
                 last_event='event_acknowledged',
+                last_processed_by=self.instance_id,
             )
 
             success = await self.handler.handle_inbound(envelope)
@@ -289,6 +357,7 @@ class CollabDaemon:
 
             self.store.update_collab(ack.collab_id,
                 last_event='ack_received',
+                last_processed_by=self.instance_id,
             )
 
             await self.handler.handle_ack(ack)
@@ -369,9 +438,12 @@ async def main():
         pid_path = _paths()['pid']
         if os.path.exists(pid_path):
             try:
-                old_pid = int(open(pid_path, 'r').read().strip())
-                os.kill(old_pid, signal.SIGTERM)
-                _log("INFO", f"Sent SIGTERM to pid={old_pid}")
+                meta = _read_pid_metadata()
+                old_pid = meta.get('pid')
+                if old_pid is None:
+                    old_pid = int(open(pid_path, 'r').read().strip())
+                _stop_remote_daemon(old_pid)
+                _log("INFO", f"Sent stop signal to pid={old_pid}")
             except OSError as e:
                 _log("WARN", f"Could not signal process: {e}")
         else:
