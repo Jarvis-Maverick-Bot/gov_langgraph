@@ -168,18 +168,19 @@ def _release_pid():
         pass
 
 
-def _stop_remote_daemon(pid: int):
+def _stop_remote_daemon(pid: int) -> bool:
     """
     Platform-specific stop of a remote daemon process.
-    Unix: SIGTERM — graceful shutdown (daemon handles signal and calls stop()).
-    Windows: taskkill /F — force-kill; no graceful SIGTERM equivalent on Windows.
-    Graceful stop on Windows requires a named-pipe signal mechanism (not yet implemented).
+    Unix: SIGTERM — daemon handles signal, runs stop() cleanly.
+    Windows: taskkill /F — force-kill; daemon's signal handler never runs.
+    Returns True if process stopped, False otherwise.
     """
     if sys.platform.startswith('win'):
-        import subprocess
         subprocess.run(['taskkill', '/PID', str(pid), '/F'])
+        return True
     else:
         os.kill(pid, signal.SIGTERM)
+        return True
 
 
 class CollabDaemon:
@@ -240,7 +241,7 @@ class CollabDaemon:
         self._log("INFO", "Shutdown event received.")
 
     async def stop(self):
-        """Graceful shutdown."""
+        """"Graceful shutdown."""
         self._log("INFO", "DAEMON_STOPPED initiated")
         self._running = False
         self._shutdown_event.set()
@@ -254,10 +255,13 @@ class CollabDaemon:
                 if not t.done():
                     t.cancel()
 
+        finally:
+            # Always release PID file — ensures clean state even if timeout fires
+            _release_pid()
+
         # Unsubscribe from NATS
         if self.nc:
             await self.nc.close()
-        _release_pid()
         self._log("INFO", "DAEMON_STOPPED completed")
 
     async def _wait_tasks(self):
@@ -442,8 +446,12 @@ async def main():
                 old_pid = meta.get('pid')
                 if old_pid is None:
                     old_pid = int(open(pid_path, 'r').read().strip())
-                _stop_remote_daemon(old_pid)
-                _log("INFO", f"Sent stop signal to pid={old_pid}")
+                stopped = _stop_remote_daemon(old_pid)
+                if stopped:
+                    _log("INFO", f"Stop signal sent to pid={old_pid}")
+                # On force-kill (Windows /F), the daemon's stop() never runs — clean up PID file here
+                _release_pid()
+                _log("INFO", "PID file cleaned up after stop")
             except OSError as e:
                 _log("WARN", f"Could not signal process: {e}")
         else:
