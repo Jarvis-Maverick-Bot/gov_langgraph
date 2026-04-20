@@ -158,8 +158,9 @@ class StandingListener:
 
 async def main():
     my_id = sys.argv[1] if len(sys.argv) > 1 else "jarvis"
+    nats_url = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 
-    listener = StandingListener(my_id=my_id)
+    listener = StandingListener(my_id=my_id, nats_url=nats_url)
 
     # Handle shutdown
     try:
