@@ -12,12 +12,12 @@ import sys
 from pathlib import Path
 
 # ── Resolve repo root for imports ─────────────────────────────────────
-# listener.py is at: .../collab_module/listener.py
-# Repo root is: .../collab_module/../  (2 levels up from collab_module/)
-_REPO_ROOT = Path(__file__).parent.parent
-_GOV_ROOT = str(_REPO_ROOT)
-if _GOV_ROOT not in sys.path:
-    sys.path.insert(0, _GOV_ROOT)
+# listener.py is at: .../governance/collab/listener.py
+# Repo root is: .../  (3 levels up from governance/collab/)
+_REPO_ROOT = Path(__file__).parent.parent.parent
+_GOV_ROOT = str(Path(__file__).parent.parent)
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from nats import connect
 from governance.collab.envelope import CollabEnvelope, AckEnvelope
