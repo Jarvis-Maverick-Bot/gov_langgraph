@@ -334,6 +334,7 @@ class CollabDaemon:
                 opened_by=envelope.from_,
                 artifact_type=getattr(envelope, 'artifact_type', None) or '',
                 artifact_path=getattr(envelope, 'artifact_path', None) or '',
+                receiver=envelope.to,
             )
             # Daemon-only bookkeeping fields — do NOT overwrite workflow state (last_event is set by handler)
             self.store.update_collab(envelope.collab_id,

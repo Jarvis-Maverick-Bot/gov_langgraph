@@ -66,8 +66,8 @@ async def main():
         "stage": "foundation_create",
         "artifact_type": "foundation",
         "artifact_path": "governance/docs/V2_0_FOUNDATION.md",
-        "owner": target_id,      # jarvis — the executor
-        "reviewer": sender_id,   # nova — the approver
+        "owner": sender_id,       # nova — primary drafter, business owner
+        "reviewer": target_id,   # jarvis — review receiver
         "doctrine_loading_set": ["v2_0_foundation_doctrine", "skos_source_model"],
         "expected_output": "foundation_draft_ready + review_request",
         "completion_criteria": "Nova sends 'Approve V2.0 Foundation'"
@@ -176,7 +176,7 @@ async def main():
     # ── Step 8: Final state change ───────────────────────────────────
     expected_state = {
         "status": "open",
-        "current_owner": target_id,
+        "current_owner": sender_id,    # nova is business owner
         "pending_action": "awaiting_foundation_draft",
         "last_event": "foundation_create_started"
     }

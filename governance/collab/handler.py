@@ -454,7 +454,7 @@ class CollabHandler:
                 self._log("WARN", f"Invalid envelope: {envelope.message_id}")
                 return False
 
-            self.store.log_message(envelope.to_dict(), direction='IN')
+            self.store.log_message(envelope.as_dict(), direction='IN')
             await self._send_ack(envelope, 'received')
 
             handler_fn = SKILL_REGISTRY.get(envelope.message_type, _handle_unknown)
@@ -485,19 +485,19 @@ class CollabHandler:
         return False
 
     async def _send_ack(self, envelope: CollabEnvelope, ack_type: str, result: str = ''):
-        """Emit an ACK for this envelope."""
-        ack = AckEnvelope(
-            collab_id=envelope.collab_id,
-            message_id=envelope.message_id,
-            message_type=envelope.message_type,
-            ack_for=ack_type,
-            from_=self.my_id,
-            to=envelope.from_,
-            status='ok' if result != 'unknown_message_type' else 'unknown'
-        )
+        """Emit an ACK for this envelope.
+        
+        ack_type: 'received' or 'processed'
+        For 'received': use AckEnvelope.received() — acknowledges receipt
+        For 'processed': use AckEnvelope.processed() — acknowledges business logic completion
+        """
+        if ack_type == 'received':
+            ack = AckEnvelope.received(envelope, envelope.from_)
+        else:
+            ack = AckEnvelope.processed(envelope, envelope.from_, result)
         try:
-            payload = ack.to_json()
-            await self.nc.publish(SUBJECTS['ack'], payload)
+            await self.nc.publish(SUBJECTS['ack'], ack.to_json())
             await self.nc.flush()
+            self._log("ACK", f"[{envelope.collab_id}] sent {ack_type} ACK for {envelope.message_id} -> {envelope.from_}")
         except Exception as e:
             self._log("ERROR", f"Failed to send ACK: {e}")

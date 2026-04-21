@@ -38,7 +38,8 @@ class CollabState:
     artifact_type: Optional[str] = None
     artifact_path: Optional[str] = None
     opened_by: str = ""
-    current_owner: str = ""
+    current_owner: str = ""       # business workflow owner
+    receiver: str = ""             # NATS routing target for this collab (envelope 'to')
     last_message_id: str = ""
     last_acknowledged_message_id: str = ""
     last_event: str = ""
@@ -183,11 +184,44 @@ class CollabStateStore:
 
     def get_or_create_collab(self, collab_id: str, opened_by: str,
                              artifact_type: Optional[str] = None,
-                             artifact_path: Optional[str] = None) -> CollabState:
+                             artifact_path: Optional[str] = None,
+                             receiver: str = "") -> CollabState:
         existing = self.get_collab(collab_id)
         if existing:
+            # Update receiver if not already set and a new one is provided
+            if receiver and not existing.receiver:
+                self.update_collab(collab_id, receiver=receiver)
             return existing
-        return self.open_collab(collab_id, opened_by, artifact_type, artifact_path)
+        return self.open_collab(collab_id, opened_by, artifact_type, artifact_path, receiver=receiver)
+
+    def open_collab(self, collab_id: str, opened_by: str,
+                    artifact_type: Optional[str] = None,
+                    artifact_path: Optional[str] = None,
+                    receiver: str = "") -> CollabState:
+        """Open a new collaboration."""
+        data = self._read_state()
+        now = datetime.now(timezone.utc).isoformat()
+        state = CollabState(
+            collab_id=collab_id,
+            status='open',
+            artifact_type=artifact_type,
+            artifact_path=artifact_path,
+            opened_by=opened_by,
+            current_owner=opened_by,
+            receiver=receiver,
+            created_at=now,
+            updated_at=now
+        )
+        data[collab_id] = state.to_dict()
+        self._write_state(data)
+        self._append_log({
+            "event": "collab_opened",
+            "collab_id": collab_id,
+            "opened_by": opened_by,
+            "receiver": receiver,
+            "timestamp": now
+        })
+        return state
 
     def emit_event(self, collab_id: str, event: str, **extra):
         """Log a workflow event."""
