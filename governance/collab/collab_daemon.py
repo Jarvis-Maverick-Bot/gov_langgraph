@@ -374,7 +374,12 @@ class CollabDaemon:
     # ── Worker Loop ───────────────────────────────────────────────────
 
     async def _worker_loop(self):
-        """Poll for in_progress items every POLL_INTERVAL seconds."""
+        """Recovery sweep loop — NOT primary message handler.
+        
+        Runs every POLL_INTERVAL seconds. Checks for deferred/stalled items
+        that the event-driven listener left behind. Labeled [RECOVERY_SWEEP]
+        in logs to distinguish from primary event path.
+        """
         while self._running:
             try:
                 await asyncio.sleep(_POLL_INTERVAL)
@@ -385,7 +390,12 @@ class CollabDaemon:
                 self._log("ERROR", f"Worker loop error: {e}")
 
     async def _poll_workers(self):
-        """Check in_progress items and dispatch any ready ones."""
+        """Recovery sweep: check in_progress collabs deferred by event-driven path.
+        
+        This is NOT primary dispatch. The event-driven listener handles new messages.
+        This sweep handles: deferred items (awaiting artifact), stalled items (timeout),
+        restart recovery. Logged as [RECOVERY_SWEEP] to make the distinction clear.
+        """
         collabs = self.store.list_collabs(status='in_progress')
         if not collabs:
             return
