@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
+from governance.collab.runtime_contract_map import DomainResult
 
 
 # Paths for doctrine loading — resolved from V2.0 shared drive structure
@@ -272,46 +273,36 @@ async def execute_review(
     artifact_path: str,
     review_scope: str,
     doctrine_loading_set: list
-) -> dict:
+) -> DomainResult:
     """
     Execute the Foundation review task (doctrine-driven reasoning producer).
 
-    Returns DomainResult (as dict for compatibility with existing code).
+    Pure reasoning: loads doctrine + draft, produces judgment.
+    Returns DomainResult on success.
+    Raises RuntimeError on doctrine_load_failed or draft_load_failed.
 
     Does NOT: send NATS messages, update state, notify.
     Caller (CollabHandler pipeline) owns those.
-
-    Returns:
-      DomainResult dict:
-      {'ok': True,  'review_result': str, 'judgment': str,
-       'judgment_path': str, 'draft_chars': int}
-      {'ok': False, 'error': str, 'error_type': str}
     """
     from governance.collab.runtime_contract_map import DomainResult
 
     handler._log("EXEC", f"[{collab_id}] starting doctrine-driven foundation_review")
 
-    # 1. Load doctrine
+    # 1. Load doctrine — raise on failure (pipeline catches as reasoning_failed)
     doctrine_result = _load_doctrine(doctrine_loading_set)
     if not doctrine_result.get("doctrine_loaded"):
+        err = RuntimeError(f"doctrine_load_failed: {doctrine_result.get('errors')}")
         handler._log("ERROR", f"[{collab_id}] doctrine_load_failed_review")
-        return {
-            'ok': False,
-            'error': str(doctrine_result.get('errors')),
-            'error_type': 'doctrine_load_failed'
-        }
+        raise err
 
     handler._log("EXEC", f"[{collab_id}] doctrine loaded OK: {list(doctrine_result.get('doctrine_snapshot', {}).keys())}")
 
-    # 2. Load Nova's draft
+    # 2. Load Nova's draft — raise on failure
     loaded, draft_content, error = _load_nova_draft(artifact_path)
     if not loaded:
+        err = RuntimeError(f"draft_load_failed: {error}")
         handler._log("ERROR", f"[{collab_id}] draft_load_failed: {error}")
-        return {
-            'ok': False,
-            'error': error,
-            'error_type': 'draft_load_failed'
-        }
+        raise err
 
     handler._log("EXEC", f"[{collab_id}] Nova draft loaded: {len(draft_content)} chars")
 
@@ -338,11 +329,15 @@ async def execute_review(
 
     handler._log("EXEC", f"[{collab_id}] doctrine-driven foundation_review COMPLETE — result={review_result_str}")
 
-    # Return DomainResult-compatible dict (pipeline converts to DomainResult)
-    return {
-        'ok': True,
-        'review_result': review_result_str,
-        'judgment': judgment,
-        'judgment_path': str(judgment_path) if judgment_path else '',
-        'draft_chars': len(draft_content)
-    }
+    # Return actual DomainResult — pipeline expects DomainResult, not dict
+    from governance.collab.runtime_contract_map import DomainResult
+    return DomainResult(
+        message_type='review_response',
+        collab_id=collab_id,
+        from_='jarvis',
+        result=review_result_str,
+        notes=judgment,
+        judgment_path=str(judgment_path) if judgment_path else '',
+        workflow='v2_0',
+        stage='foundation_create_review'
+    )

@@ -235,27 +235,37 @@ async def run_pipeline(
     reasoning_fn: Optional[ReasoningFn] = None,
     doctrine_loading_set: Optional[List[str]] = None,
     workflow: str = 'v2_0',
-    stage: str = ''
+    stage: str = '',
+    skip_send: bool = False
 ) -> str:
     """
     Unified handler execution pipeline.
 
-    Step 1: Check state=exited runtime gate
-    Step 2: Build doctrine context (给 reasoning 用)
-    Step 3: Call reasoning_fn (if provided — None for terminal steps)
-    Step 4: A层校验 (reasoning output validation)
-    Step 5: 构建 CollabEnvelope → B层校验 (envelope validation)
-    Step 6: 发送消息 + 更新状态 + 通知
+    Terminal step branch (mandatory_output=None or skip_send=True):
+      Step 1: state=exited gate
+      Step 2: doctrine context (if set)
+      Step 3a: terminal — skip reasoning/validation/envelope/send
+      Step 6: state update + notify
+
+    Normal step branch (mandatory_output set and skip_send=False):
+      Step 1: state=exited gate
+      Step 2: doctrine context
+      Step 3: reasoning_fn → DomainResult
+      Step 4: A层校验 (reasoning output validation)
+      Step 5: 构建 CollabEnvelope → B层校验
+      Step 6: 发送消息 + 更新状态 + 通知
 
     Args:
         handler: CollabHandler instance
         envelope: inbound CollabEnvelope
         contract: StepContract for this message_type
         reasoning_fn: async fn(handler, envelope, doctrine_context) -> DomainResult
-                      None for terminal steps (complete, exit)
+                      None for terminal steps
         doctrine_loading_set: list of doctrine names to load
         workflow: workflow identifier
         stage: stage identifier
+        skip_send: if True, skip Steps 4-6 (for steps where current agent
+                   does not produce an outbound business message)
 
     Returns:
         result string: 'completed' | failure_type
@@ -269,15 +279,55 @@ async def run_pipeline(
         await _send_ack(handler, envelope, 'received', result='rejected_collab_exited')
         return "rejected_exited"
 
+    # ── Terminal step branch ─────────────────────────────────────────
+    # mandatory_output=None (complete/exit) or skip_send=True (ack-only steps)
+    is_terminal = (contract.mandatory_output is None) or skip_send
+
     # ── Step 2: Build doctrine context ───────────────────────────────
     doctrine_ctx = None
-    if doctrine_loading_set:
+    if doctrine_loading_set and not is_terminal:
         try:
             doctrine_ctx = build_doctrine_context(doctrine_loading_set, workflow, stage)
         except Exception as e:
             await _handle_failure(handler, envelope, contract, 'doctrine_build_failed', [str(e)])
             return "doctrine_build_failed"
 
+    if is_terminal:
+        # Terminal path: no reasoning, no message sending
+        # Only state update + notify
+        handler.store.update_collab(
+            envelope.collab_id,
+            status='exited' if envelope.message_type == 'exit' else 'completed',
+            pending_action='',
+            last_event=f"{envelope.message_type}_completed"
+        )
+        handler.store.emit_event(envelope.collab_id, f"{envelope.message_type}_completed")
+
+        # Apply notify policy if present
+        if contract.notify_policy:
+            domain = DomainResult(
+                message_type=envelope.message_type,
+                collab_id=envelope.collab_id,
+                from_=handler.my_id,
+                result='',
+                notes='',
+                workflow=workflow,
+                stage=stage
+            )
+            dummy_envelope = CollabEnvelope(
+                message_id=envelope.message_id,
+                collab_id=envelope.collab_id,
+                message_type=envelope.message_type,
+                from_=handler.my_id,
+                to='',
+                payload={},
+                summary=''
+            )
+            await _apply_notify_policy(handler, contract, domain, dummy_envelope)
+
+        return "completed"
+
+    # ── Normal step branch ───────────────────────────────────────────
     # ── Step 3: Call reasoning_fn ───────────────────────────────────
     domain_result = None
     if reasoning_fn is not None:
@@ -287,9 +337,8 @@ async def run_pipeline(
             await _handle_failure(handler, envelope, contract, 'reasoning_failed', [str(e)])
             return "reasoning_failed"
     else:
-        # Terminal step: no reasoning needed, create minimal DomainResult
         domain_result = DomainResult(
-            message_type=contract.mandatory_output or envelope.message_type,
+            message_type=contract.mandatory_output,
             collab_id=envelope.collab_id,
             from_=handler.my_id,
             result='',
@@ -326,11 +375,8 @@ async def run_pipeline(
         return "envelope_build_failed"
 
     # ── Step 6: 发送 + 状态 + 通知 ─────────────────────────────────
-    # Send NATS message
     sent = await _send_envelope(handler, outbound_envelope)
     if not sent:
-        # NATS send failed — retry logic handled inside _send_envelope
-        # After retries exhausted, _send_envelope returns False
         await _handle_failure(
             handler, envelope, contract,
             'nats_send_failed',
@@ -338,7 +384,6 @@ async def run_pipeline(
         )
         return "nats_send_failed"
 
-    # Update state
     handler.store.update_collab(
         envelope.collab_id,
         status='in_progress',
@@ -346,7 +391,6 @@ async def run_pipeline(
         last_event=f"{envelope.message_type}_completed"
     )
 
-    # Apply notify policy
     await _apply_notify_policy(handler, contract, domain_result, outbound_envelope)
 
     return "completed"
@@ -374,8 +418,9 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
     """
     Handle 'start_foundation_create' — Nova initiates Foundation delivery.
 
-    Terminal-ish: Nova is owner, no model reasoning here.
-    This handler sets up the collab for Nova to produce draft.
+    This handler runs on the receiving side (Jarvis): records state and ACKs.
+    Nova (the executor) produces the review_request herself — no outbound
+    business message from this handler. Uses run_pipeline(skip_send=True).
     """
     from .runtime_contract_map import get_contract
 
@@ -384,8 +429,20 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
         return "rejected_exited"
 
     contract = get_contract('start_foundation_create')
-    payload = envelope.payload or {}
 
+    # Terminal path via run_pipeline: state update + notify, no outbound message
+    result = await run_pipeline(
+        handler=handler,
+        envelope=envelope,
+        contract=contract,
+        reasoning_fn=None,
+        doctrine_loading_set=contract.doctrine_loading_set,
+        workflow='v2_0',
+        stage='foundation_create',
+        skip_send=True
+    )
+
+    # Override last_event to be specific
     handler.store.update_collab(
         envelope.collab_id,
         status='open',
@@ -402,7 +459,8 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
         artifact_type='foundation',
         from_=envelope.from_
     )
-    return 'foundation_create_started'
+
+    return result
 
 
 async def _handle_foundation_draft_ready(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
@@ -479,6 +537,10 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
 
     # Define reasoning_fn inline
     async def reasoning_fn(h, env, doctrine_ctx):
+        # execute_review returns DomainResult on success
+        # On failure it raises an exception (caught by run_pipeline's reasoning_failed)
+        # But doctrine_load_failed / draft_load_failed are handled inside execute_review
+        # and returned as DomainResult with result='revision_required' — check via notes
         result = await execute_review(
             h,
             collab_id=env.collab_id,
@@ -486,28 +548,10 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
             review_scope=review_scope,
             doctrine_loading_set=contract.doctrine_loading_set
         )
-        if not result.get('ok'):
-            from .runtime_contract_map import DomainResult
-            return DomainResult(
-                message_type='review_response',
-                collab_id=env.collab_id,
-                from_='jarvis',
-                result='revision_required',
-                notes=f"Review execution failed: {result.get('error')}",
-                workflow=workflow,
-                stage=stage
-            )
-        from .runtime_contract_map import DomainResult
-        return DomainResult(
-            message_type='review_response',
-            collab_id=env.collab_id,
-            from_='jarvis',
-            result=result['review_result'],
-            notes=result['judgment'],
-            judgment_path=result.get('judgment_path', ''),
-            workflow=workflow,
-            stage=stage
-        )
+        # execute_review returns DomainResult directly
+        # If it encountered a load failure it returns DomainResult with
+        # notes containing the error — surface this to pipeline
+        return result
 
     result = await run_pipeline(
         handler=handler,
