@@ -4,19 +4,27 @@ Sends proactive notifications to Alex via Telegram Bot HTTP API.
 Sends workflow messages to Nova via NATS gov.collab.command subject.
 """
 
-import urllib.request
-import urllib.error
 import json
 import os
 import threading
-import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 
-_TELEGRAM_BOT_TOKEN = "8599695108:AAEFpu_ij3eSR4obBKfgfkrQejhnl2hkabQ"
-_TELEGRAM_API_URL = f"https://api.telegram.org/bot{_TELEGRAM_BOT_TOKEN}"
+def _load_config() -> dict:
+    """Load collab config from governance/collab/collab_config.json."""
+    config_path = Path(__file__).parent.parent / "collab" / "collab_config.json"
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+_cfg = _load_config()
+_TELEGRAM_BOT_TOKEN = _cfg.get('telegram_bot_token', '')
+_TELEGRAM_API_URL = f"https://api.telegram.org/bot{_TELEGRAM_BOT_TOKEN}" if _TELEGRAM_BOT_TOKEN else None
 
 
 def _send_telegram_sync(message: str, chat_id: str = "8231866924") -> bool:
@@ -24,6 +32,10 @@ def _send_telegram_sync(message: str, chat_id: str = "8231866924") -> bool:
     Send a Telegram message via Bot HTTP API.
     Returns True if sent successfully, False otherwise.
     """
+    if not _TELEGRAM_BOT_TOKEN:
+        print("[NOTIFY] Telegram bot token not configured in collab_config.json")
+        return False
+
     payload = {
         "chat_id": chat_id,
         "text": message,
@@ -46,9 +58,6 @@ def _send_telegram_sync(message: str, chat_id: str = "8231866924") -> bool:
             else:
                 print(f"[NOTIFY] Telegram API error: {result}")
                 return False
-    except urllib.error.HTTPError as e:
-        print(f"[NOTIFY] HTTP error {e.code}: {e.reason}")
-        return False
     except Exception as e:
         print(f"[NOTIFY] Telegram send failed: {e}")
         return False
@@ -71,14 +80,21 @@ def send_telegram_notification_async(message: str, chat_id: str = "8231866924"):
     t.start()
 
 
+# ── NATS Outbound helpers ──────────────────────────────────────────────────────
+
+import asyncio
+import urllib.request
+import urllib.error
+
+
 async def send_review_response_to_nova(
-    nc,  # NATS connection (asyncio nats client)
+    nc,
     collab_id: str,
     from_agent: str,
     to_agent: str,
     workflow: str,
     stage: str,
-    review_result: str,  # "approved" | "revision_required" | "blocked"
+    review_result: str,
     review_artifact_path: str,
     review_notes: str,
     subject: str = "gov.collab.command"

@@ -11,6 +11,7 @@ Workflow: v2_0 / stage: foundation_create
 import asyncio
 import json
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional, Dict, Any
@@ -35,7 +36,7 @@ class _SubjectDict(dict):
 SUBJECTS = _SubjectDict(_SUBJECTS)
 
 
-# ── Skill Handler Registry (Phase 2) ───────────────────────────────────
+# ── Skill Handler Registry (Phase 2) ─────────────────────────────────────────
 # Maps message_type → async handler function.
 # Each handler: async def handler(handler: CollabHandler, envelope: CollabEnvelope) -> str
 # Returns a result description string.
@@ -56,27 +57,25 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
     Layer C binding for: "Start V2.0 Foundation Create" command.
     Command intent: start_foundation_delivery
 
-    Business logic:
-    1. Create collab in 'open' state, owned by this agent (jarvis)
-    2. Set pending_action to 'awaiting_foundation_draft'
-    3. Emit foundation_create_started event
-    4. Return result string for ACK
-
-    This does NOT produce the artifact — skill/foundation_delivery handles that.
-    This only opens the workflow and sets the governance state.
+    Ownership model (corrected):
+    - Nova is primary owner — collab owned by 'nova' (from_ field)
+    - Jarvis receives the message but does NOT own this workflow
+    - pending_action = 'awaiting_foundation_draft' means Nova must produce the draft
+    - artifact_path is NOT set here — comes from review_request payload
 
     Completion criteria:
     - collab.status = 'open'
-    - collab.current_owner = handler.my_id
+    - collab.current_owner = 'nova' (from Alex's kickoff, not Jarvis)
     - collab.pending_action = 'awaiting_foundation_draft'
     - collab.last_event = 'foundation_create_started'
+    - collab.artifact_path = '' (unset — comes from review_request)
     """
     handler.store.update_collab(
         envelope.collab_id,
         status='open',
-        current_owner=handler.my_id,
+        current_owner=envelope.from_,  # Nova owns this workflow
         artifact_type='foundation',
-        artifact_path='governance/docs/V2_0_FOUNDATION.md',
+        artifact_path='',  # No artifact yet — draft path comes from review_request
         pending_action='awaiting_foundation_draft',
         last_event='foundation_create_started'
     )
@@ -92,21 +91,25 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
 
 async def _handle_foundation_draft_ready(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
     """
-    Handle 'foundation_draft_ready' — mark that the Foundation draft is available.
-    Used by the executor to signal draft completion.
+    Handle 'foundation_draft_ready' — Nova signals draft is complete.
+    artifact_path comes from payload, not hardcoded.
     """
+    payload = envelope.payload or {}
+    artifact_path = payload.get('artifact_path', '')
+
     handler.store.update_collab(
         envelope.collab_id,
         status='in_progress',
         pending_action='',
-        last_event='foundation_draft_ready'
+        last_event='foundation_draft_ready',
+        artifact_path=artifact_path
     )
     handler.store.emit_event(
         envelope.collab_id,
         'foundation_draft_ready',
         message_id=envelope.message_id,
         artifact_type='foundation',
-        artifact_path='governance/docs/V2_0_FOUNDATION.md'
+        artifact_path=artifact_path
     )
     return 'foundation_draft_ready'
 
@@ -118,9 +121,14 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
     Nova (primary executor) has produced a real Foundation draft.
     Jarvis (reviewer) receives it here and sets up review task.
 
+    Ownership model (corrected):
+    - current_owner = 'jarvis' — Jarvis is the reviewer for this stage
+    - artifact_path sourced from payload (Nova's real draft path)
+    - pending_action = 'awaiting_review_execution' triggers worker
+
     Payload expected:
       - command_intent: 'foundation_review_handover'
-      - artifact_path: real path to Nova's draft
+      - artifact_path: real path to Nova's draft  ← used for actual review
       - artifact_type: 'foundation'
       - review_scope: what Jarvis is judging
       - expected_output: 'review_response'
@@ -134,13 +142,12 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
     workflow = payload.get('workflow', 'v2_0')
     stage = payload.get('stage', 'foundation_create_review')
 
-    # Store review context in collab state
     handler.store.update_collab(
         envelope.collab_id,
         status='in_progress',
-        current_owner=handler.my_id,
+        current_owner=handler.my_id,  # Jarvis owns the review stage
         artifact_type=payload.get('artifact_type', 'foundation'),
-        artifact_path=artifact_path,
+        artifact_path=artifact_path,  # From Nova's draft payload — NOT hardcoded
         pending_action='awaiting_review_execution',
         last_event='review_handover_received'
     )
@@ -159,12 +166,67 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
     return 'review_handover_received'
 
 
+def _build_envelope(
+    message_type: str,
+    collab_id: str,
+    from_: str,
+    to: str,
+    summary: str,
+    payload: dict,
+    artifact_type: Optional[str] = None,
+    artifact_path: Optional[str] = None
+) -> CollabEnvelope:
+    """Build a standard CollabEnvelope. Used for all outbound messages."""
+    return CollabEnvelope(
+        message_id=f"msg-{uuid.uuid4().hex[:12]}",
+        collab_id=collab_id,
+        message_type=message_type,
+        from_=from_,
+        to=to,
+        artifact_type=artifact_type,
+        artifact_path=artifact_path,
+        payload=payload,
+        summary=summary,
+        timestamp=datetime.now(timezone.utc).isoformat()
+    )
+
+
+async def _send_envelope(handler: 'CollabHandler', envelope: CollabEnvelope,
+                          subject: str = 'gov.collab.command') -> bool:
+    """
+    Send a CollabEnvelope via NATS and wait for ACK.
+    Returns True if ACK received within timeout, False otherwise.
+    """
+    key = f"{envelope.collab_id}:{envelope.message_id}"
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    handler._pending_ack[key] = future
+
+    try:
+        await handler.nc.publish(subject, envelope.to_json())
+        await handler.nc.flush()
+        handler._log("SEND", f"[{envelope.collab_id}] {envelope.message_type} sent -> {envelope.to}")
+    except Exception as e:
+        handler._log("ERROR", f"[{envelope.collab_id}] send failed: {e}")
+        return False
+
+    try:
+        await asyncio.wait_for(future, timeout=15.0)
+        handler._log("ACK", f"[{envelope.collab_id}] ACK received for {envelope.message_type}")
+        return True
+    except asyncio.TimeoutError:
+        handler._log("WARN", f"[{envelope.collab_id}] ACK timeout for {envelope.message_type}")
+        return False
+    finally:
+        handler._pending_ack.pop(key, None)
+
+
 async def _handle_review_response(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
     """
     Handle 'review_response' — record review result.
 
     Behavior differs by agent:
-    - Jarvis receives review_response from Nova (should not happen in normal flow for now)
+    - Jarvis receives review_response from Nova (should not happen in normal flow)
     - Nova receives review_response from Jarvis: auto-decide next step based on review_result
 
     Nova auto-follow-up logic (review_result-based):
@@ -190,30 +252,23 @@ async def _handle_review_response(handler: 'CollabHandler', envelope: CollabEnve
         review_notes=review_notes
     )
 
-    # Nova auto-follow-up: when Nova receives review_response from Jarvis
     if handler.my_id == 'nova':
         if review_result == 'approved':
-            # Step 6: send complete to Jarvis
-            try:
-                complete_envelope = {
-                    'message_type': 'complete',
-                    'collab_id': envelope.collab_id,
-                    'from': 'nova',
-                    'to': 'jarvis',
-                    'summary': 'Foundation Create workflow complete — approved by Jarvis review',
-                    'timestamp': datetime.now(timezone.utc).isoformat(),
-                    'payload': {
-                        'workflow': 'v2_0',
-                        'stage': 'foundation_create_review',
-                        'review_result': review_result,
-                        'review_judgment_path': review_judgment_path
-                    }
+            # Step 6: send complete to Jarvis using unified envelope
+            complete_env = _build_envelope(
+                message_type='complete',
+                collab_id=envelope.collab_id,
+                from_='nova',
+                to='jarvis',
+                summary='Foundation Create workflow complete — approved by Jarvis review',
+                payload={
+                    'workflow': 'v2_0',
+                    'stage': 'foundation_create_review',
+                    'review_result': review_result,
+                    'review_judgment_path': review_judgment_path
                 }
-                await handler.nc.publish('gov.collab.command', json.dumps(complete_envelope).encode())
-                await handler.nc.flush()
-                handler._log("EXEC", f"[{envelope.collab_id}] complete sent to Jarvis")
-            except Exception as e:
-                handler._log("ERROR", f"[{envelope.collab_id}] failed to send complete: {e}")
+            )
+            await _send_envelope(handler, complete_env)
 
             # Step 7: Telegram notify Alex
             try:
@@ -225,7 +280,6 @@ async def _handle_review_response(handler: 'CollabHandler', envelope: CollabEnve
                     f"Review judgment: {review_judgment_path or 'N/A'}\n"
                     f"Status: Ready for next stage"
                 )
-                handler._log("EXEC", f"[{envelope.collab_id}] Telegram completion notification sent")
             except Exception as e:
                 handler._log("WARN", f"[{envelope.collab_id}] Telegram notification failed: {e}")
 
@@ -360,7 +414,6 @@ SKILL_REGISTRY: Dict[str, Callable] = {
     'notify': _handle_notify,
     'ping': _handle_ping,
     'pong': _handle_ping,
-    # 'ack' is handled via handle_ack, not here
 }
 
 
@@ -397,18 +450,13 @@ class CollabHandler:
         Returns True if processed, False otherwise.
         """
         try:
-            # 1. Validate
             if not envelope.validate():
                 self._log("WARN", f"Invalid envelope: {envelope.message_id}")
                 return False
 
-            # 2. Persist to durable store
             self.store.log_message(envelope.to_dict(), direction='IN')
-
-            # 3. Emit received ACK
             await self._send_ack(envelope, 'received')
 
-            # 4. Dispatch to skill handler
             handler_fn = SKILL_REGISTRY.get(envelope.message_type, _handle_unknown)
             try:
                 result = await handler_fn(self, envelope)
@@ -417,9 +465,7 @@ class CollabHandler:
                 self._log("ERROR", f"Handler error for {envelope.message_type}: {e}")
                 result = f'error: {e}'
 
-            # 5. Emit processed ACK
             await self._send_ack(envelope, 'processed', result=result)
-
             return True
 
         except Exception as e:

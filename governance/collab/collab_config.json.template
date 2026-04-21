@@ -1,4 +1,5 @@
 {
+  "_comment": "Template for collab_config.json — copy to collab_config.json and fill in real values",
   "my_id": "",
   "sender_id": "",
   "target_id": "",
@@ -13,5 +14,7 @@
   "heartbeat_interval": 60,
   "shutdown_grace": 30,
   "data_dir": null,
-  "protocol_version": "0.2"
+  "protocol_version": "0.2",
+  "_comment_telegram": "Telegram bot token — get from @BotFather on Telegram",
+  "telegram_bot_token": ""
 }
