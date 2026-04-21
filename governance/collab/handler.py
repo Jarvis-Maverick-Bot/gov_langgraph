@@ -498,7 +498,7 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
     Pipeline: run_pipeline with execute_review as reasoning_fn.
     """
     from .runtime_contract_map import get_contract
-    from .review_executor import execute_review
+    from .review_executor import execute_review, _to_sharefolder_path
 
     if _is_exited(envelope.collab_id, handler.store):
         await _send_ack(handler, envelope, 'received', result='rejected_collab_exited')
@@ -506,7 +506,9 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
 
     contract = get_contract('review_request')
     payload = envelope.payload or {}
-    artifact_path = payload.get('artifact_path', '')
+    # Convert macOS local path to sharefolder path for cross-machine compatibility
+    raw_artifact_path = payload.get('artifact_path', '')
+    artifact_path = _to_sharefolder_path(raw_artifact_path)
     review_scope = payload.get('review_scope', 'foundation completeness and governance alignment')
     workflow = payload.get('workflow', 'v2_0')
     stage = payload.get('stage', 'foundation_create_review')
@@ -925,6 +927,8 @@ class CollabHandler:
         try:
             await self.nc.publish(SUBJECTS['ack'], ack.to_json())
             await self.nc.flush()
+            # Log ACK OUT
+            self.store.log_message(ack.as_dict(), 'OUT')
             self._log("ACK", f"[{envelope.collab_id}] sent {ack_type} ACK for {envelope.message_id} -> {envelope.from_}")
         except Exception as e:
             self._log("ERROR", f"Failed to send ACK: {e}")
@@ -949,6 +953,8 @@ async def _send_envelope(handler: 'CollabHandler', envelope: CollabEnvelope,
             await handler.nc.publish(subject, envelope.to_json())
             await handler.nc.flush()
             handler._log("SEND", f"[{envelope.collab_id}] {envelope.message_type} sent -> {envelope.to} (attempt {attempt + 1})")
+            # Log OUT immediately after successful publish, before ACK wait
+            handler.store.log_message(envelope.as_dict(), 'OUT')
         except Exception as e:
             handler._log("ERROR", f"[{envelope.collab_id}] send failed (attempt {attempt + 1}): {e}")
             handler._pending_ack.pop(key, None)

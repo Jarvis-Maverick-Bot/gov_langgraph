@@ -328,6 +328,9 @@ class CollabDaemon:
 
             self._log("CMD", f"[{envelope.collab_id}] {envelope.message_type}: {envelope.summary}")
 
+            # Log IN before any processing
+            self.store.log_message(envelope.as_dict(), 'IN')
+
             # Ensure collab exists before writing daemon-owned fields
             self.store.get_or_create_collab(
                 envelope.collab_id,
@@ -366,6 +369,8 @@ class CollabDaemon:
                 last_event='ack_received',
                 last_processed_by=self.instance_id,
             )
+            # Log ACK IN
+            self.store.log_message(ack.as_dict(), 'IN')
 
             await self.handler.handle_ack(ack)
 

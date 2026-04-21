@@ -21,6 +21,27 @@ from governance.collab.runtime_contract_map import DomainResult
 
 # Paths for doctrine loading — resolved from V2.0 shared drive structure
 _SHARED_ROOT = Path(r"\\192.168.31.124\Nova-Jarvis-Shared\working\01-projects\Nexus\V2.0")
+
+# macOS sharefolder mount base — convert to sharefolder path for Windows/Unix cross-compatibility
+_MACOS_SHAREFOLDER_BASE = "/Users/alex/Nova-Jarvis-Shared"
+_SHAREFOLDER_BASE = r"\\192.168.31.124\Nova-Jarvis-Shared"
+
+
+def _to_sharefolder_path(artifact_path: str) -> str:
+    """
+    Convert macOS local sharefolder path to Windows/Unix sharefolder path.
+    e.g. /Users/alex/Nova-Jarvis-Shared/... -> \\192.168.31.124\Nova-Jarvis-Shared\...
+    
+    Also handles already-sharefolder paths (no-op).
+    """
+    if not artifact_path:
+        return artifact_path
+    if artifact_path.startswith(_SHAREFOLDER_BASE.replace('\\\\', '\\')):
+        # Already in sharefolder format
+        return artifact_path
+    if artifact_path.startswith(_MACOS_SHAREFOLDER_BASE):
+        return artifact_path.replace(_MACOS_SHAREFOLDER_BASE, _SHAREFOLDER_BASE.replace('\\', '\\\\'))
+    return artifact_path
 _FOUNDATION_BASELINE = _SHARED_ROOT / "01-release-definition" / "V2_0_FOUNDATION_V0_2.md"
 _SCOPE_DOC = _SHARED_ROOT / "01-release-definition" / "V2_0_SCOPE_V0_2.md"
 _PRD_DOC = _SHARED_ROOT / "01-release-definition" / "V2_0_PRD_V0_2.md"
@@ -68,12 +89,19 @@ def _load_doctrine(doctrine_loading_set: list) -> dict:
 
 
 def _load_nova_draft(artifact_path: str) -> Tuple[bool, str, Optional[str]]:
-    """Load Nova's Foundation draft from artifact_path."""
+    """Load Nova's Foundation draft from artifact_path.
+    
+    Handles cross-platform path conversion:
+    - macOS /Users/alex/... -> \\192.168.31.124\Nova-Jarvis-Shared\...
+    - Already-sharefolder paths pass through unchanged
+    """
     if not artifact_path:
         return False, "", "artifact_path is empty"
-    path = Path(artifact_path)
+    # Convert macOS local path to sharefolder path
+    sharefolder_path = _to_sharefolder_path(artifact_path)
+    path = Path(sharefolder_path)
     if not path.exists():
-        return False, "", f"draft file not found: {artifact_path}"
+        return False, "", f"draft file not found: {sharefolder_path}"
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
