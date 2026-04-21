@@ -308,49 +308,41 @@ Draft length: {draft_len} chars
 
 
 async def execute_review(handler: 'CollabHandler', collab_id: str, artifact_path: str,
-                         review_scope: str, doctrine_loading_set: list):
+                         review_scope: str, doctrine_loading_set: list) -> dict:
     """
     Execute the Foundation review task (doctrine-driven Option B reviewer).
 
-    Steps:
-      1. Load doctrine (baseline + scope + PRD)
-      2. Load Nova's draft
-      3. Produce doctrine-driven review judgment
-      4. Save judgment artifact
-      5. Send review_response to Nova via NATS
-      6. Update collab state
-      7. Notify Alex via Telegram
+    Returns a structured result dict — does NOT send messages or update state.
+    Caller (CollabHandler) owns message sending and state update.
+
+    Returns:
+      {'ok': True,  'review_result': str, 'judgment': str,
+                         'judgment_path': str, 'draft_chars': int}
+      {'ok': False, 'error': str,       'error_type': 'doctrine_load_failed|draft_load_failed'}
     """
     handler._log("EXEC", f"[{collab_id}] starting doctrine-driven foundation_review")
 
     # 1. Load doctrine
     doctrine_result = _load_doctrine(doctrine_loading_set)
     if not doctrine_result.get("doctrine_loaded"):
-        handler.store.update_collab(
-            collab_id,
-            status='in_progress',
-            pending_action='awaiting_revision',
-            last_event='doctrine_load_failed_review'
-        )
-        handler.store.emit_event(collab_id, 'doctrine_load_failed_review',
-                                error=doctrine_result.get('errors'))
         handler._log("ERROR", f"[{collab_id}] doctrine_load_failed_review")
-        return
+        return {
+            'ok': False,
+            'error': str(doctrine_result.get('errors')),
+            'error_type': 'doctrine_load_failed'
+        }
 
     handler._log("EXEC", f"[{collab_id}] doctrine loaded OK: {list(doctrine_result.get('doctrine_snapshot', {}).keys())}")
 
     # 2. Load Nova's draft
     loaded, draft_content, error = _load_nova_draft(artifact_path)
     if not loaded:
-        handler.store.update_collab(
-            collab_id,
-            status='in_progress',
-            pending_action='awaiting_revision',
-            last_event='draft_load_failed'
-        )
-        handler.store.emit_event(collab_id, 'draft_load_failed', error=error, artifact_path=artifact_path)
         handler._log("ERROR", f"[{collab_id}] draft_load_failed: {error}")
-        return
+        return {
+            'ok': False,
+            'error': error,
+            'error_type': 'draft_load_failed'
+        }
 
     handler._log("EXEC", f"[{collab_id}] Nova draft loaded: {len(draft_content)} chars")
 
@@ -375,55 +367,11 @@ async def execute_review(handler: 'CollabHandler', collab_id: str, artifact_path
         handler._log("ERROR", f"[{collab_id}] failed to write review judgment: {e}")
         judgment_path = None
 
-    # 5. Send review_response to Nova via NATS
-    try:
-        nc = getattr(handler, 'nc', None)
-        if nc is None:
-            raise RuntimeError("handler.nc is None")
-        from governance.collab.notify import send_review_response_to_nova
-        await send_review_response_to_nova(
-            nc=nc,
-            collab_id=collab_id,
-            from_agent="jarvis",
-            to_agent="nova",
-            workflow="v2_0",
-            stage="foundation_create_review",
-            review_result=review_result,
-            review_artifact_path=str(judgment_path) if judgment_path else "",
-            review_notes=judgment[:500]
-        )
-        handler._log("EXEC", f"[{collab_id}] review_response sent to Nova")
-    except Exception as e:
-        handler._log("ERROR", f"[{collab_id}] failed to send review_response: {e}")
-
-    # 6. Update collab state
-    handler.store.update_collab(
-        collab_id,
-        status='completed',
-        pending_action='',
-        last_event='review_completed'
-    )
-    handler.store.emit_event(
-        collab_id,
-        'review_completed',
-        review_result=review_result,
-        review_judgment_path=str(judgment_path) if judgment_path else "",
-        draft_chars=len(draft_content)
-    )
-
-    handler._log("EXEC", f"[{collab_id}] collab state updated: review_completed")
-
-    # 7. Notify Alex via Telegram
-    try:
-        from governance.collab.notify import send_telegram_notification_async
-        send_telegram_notification_async(
-            f"*Foundation Review Complete*\n"
-            f"Collab: `{collab_id}`\n"
-            f"Draft: {len(draft_content)} chars\n"
-            f"Result: *{review_result.upper()}*\n"
-            f"Judgment: {str(judgment_path) if judgment_path else 'N/A'}"
-        )
-    except Exception as e:
-        handler._log("WARN", f"[{collab_id}] Telegram notification failed: {e}")
-
     handler._log("EXEC", f"[{collab_id}] doctrine-driven foundation_review COMPLETE — result={review_result}")
+    return {
+        'ok': True,
+        'review_result': review_result,
+        'judgment': judgment,
+        'judgment_path': str(judgment_path) if judgment_path else '',
+        'draft_chars': len(draft_content)
+    }

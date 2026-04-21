@@ -424,17 +424,9 @@ class CollabDaemon:
                     self.store.update_collab(c.collab_id, status='failed', last_event='executor_error', pending_action='')
 
             elif action == 'awaiting_review_execution':
-                self._log("WORKER", f"[TASK_EXEC] collab_id={c.collab_id} pending_action={action} — triggering review executor")
-                artifact_path = c.artifact_path or ''
-                review_scope = 'foundation completeness and governance alignment'
-                doctrine_loading_set = ['v2_0_foundation_baseline', 'v2_0_scope', 'v2_0_prd']
-                from governance.collab.review_executor import execute_review
-                try:
-                    await execute_review(self.handler, c.collab_id, artifact_path, review_scope, doctrine_loading_set)
-                    self._log("WORKER", f"[TASK_EXEC] collab_id={c.collab_id} review executor completed")
-                except Exception as e:
-                    self._log("ERROR", f"[TASK_EXEC] collab_id={c.collab_id} review executor failed: {e}")
-                    self.store.update_collab(c.collab_id, status='in_progress', last_event='review_executor_error', pending_action='awaiting_revision')
+                # Handler owns this — do not process in worker sweep
+                # Only a recovery case if handler missed it (check last_processed_by)
+                self._log("WORKER", f"[SKIP] collab_id={c.collab_id} pending_action={action} — handler owns review execution")
 
             elif action == 'awaiting_artifact':
                 self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} still waiting for artifact")

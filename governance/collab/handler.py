@@ -118,27 +118,26 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
     """
     Handle 'review_request' — Nova hands over draft to Jarvis for review.
 
-    Nova (primary executor) has produced a real Foundation draft.
-    Jarvis (reviewer) receives it here and sets up review task.
-
-    Ownership model (corrected):
-    - current_owner = 'jarvis' — Jarvis is the reviewer for this stage
-    - artifact_path sourced from payload (Nova's real draft path)
-    - pending_action = 'awaiting_review_execution' triggers worker
+    This handler OWNS the review execution (not the worker sweep).
+    1. Update state to in_progress/jarvis
+    2. Execute review inline (await executor)
+    3. Send review_response as business response to Nova
+    4. Update state based on result
+    5. Notify Alex via Telegram
 
     Payload expected:
       - command_intent: 'foundation_review_handover'
-      - artifact_path: real path to Nova's draft  ← used for actual review
+      - artifact_path: real path to Nova's draft
       - artifact_type: 'foundation'
       - review_scope: what Jarvis is judging
-      - expected_output: 'review_response'
       - workflow: 'v2_0'
       - stage: 'foundation_create_review'
     """
+    from governance.collab.review_executor import execute_review
+
     payload = envelope.payload or {}
     artifact_path = payload.get('artifact_path', '')
     review_scope = payload.get('review_scope', 'foundation completeness and governance alignment')
-    expected_output = payload.get('expected_output', 'review_response')
     workflow = payload.get('workflow', 'v2_0')
     stage = payload.get('stage', 'foundation_create_review')
 
@@ -147,7 +146,7 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
         status='in_progress',
         current_owner=handler.my_id,  # Jarvis owns the review stage
         artifact_type=payload.get('artifact_type', 'foundation'),
-        artifact_path=artifact_path,  # From Nova's draft payload — NOT hardcoded
+        artifact_path=artifact_path,
         pending_action='awaiting_review_execution',
         last_event='review_handover_received'
     )
@@ -159,11 +158,93 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
         summary=envelope.summary,
         artifact_path=artifact_path,
         review_scope=review_scope,
-        expected_output=expected_output,
         workflow=workflow,
         stage=stage
     )
-    return 'review_handover_received'
+
+    # ── Step 2: Execute review inline (not via worker) ─────────────
+    result = await execute_review(
+        handler,
+        collab_id=envelope.collab_id,
+        artifact_path=artifact_path,
+        review_scope=review_scope,
+        doctrine_loading_set=['v2_0_foundation_baseline', 'v2_0_scope', 'v2_0_prd']
+    )
+
+    if not result.get('ok'):
+        # Doctrine/draft failure: notify Nova, set pending_action for revision
+        handler.store.update_collab(
+            envelope.collab_id,
+            status='in_progress',
+            pending_action='awaiting_revision',
+            last_event=f"review_{result['error_type']}"
+        )
+        handler.store.emit_event(envelope.collab_id, f"review_{result['error_type']}",
+                                error=result.get('error'))
+        # Still send a review_response to Nova so she knows
+        review_resp = _build_envelope(
+            message_type='review_response',
+            collab_id=envelope.collab_id,
+            from_='jarvis',
+            to='nova',
+            payload={
+                'review_result': 'revision_required',
+                'review_notes': f"Review failed: {result.get('error')}",
+                'review_artifact_path': '',
+                'workflow': workflow,
+                'stage': stage
+            },
+            summary=f'Foundation review failed: {result.get("error_type")}'
+        )
+        await _send_envelope(handler, review_resp)
+        return f"review_{result['error_type']}"
+
+    # ── Step 3: Send review_response to Nova ───────────────────────
+    review_resp = _build_envelope(
+        message_type='review_response',
+        collab_id=envelope.collab_id,
+        from_='jarvis',
+        to='nova',
+        payload={
+            'review_result': result['review_result'],
+            'review_notes': result['judgment'][:500],
+            'review_artifact_path': result.get('judgment_path', ''),
+            'workflow': workflow,
+            'stage': stage
+        },
+        summary=f'Foundation review: {result["review_result"]}'
+    )
+    await _send_envelope(handler, review_resp)
+
+    # ── Step 4: Update state ────────────────────────────────────────
+    handler.store.update_collab(
+        envelope.collab_id,
+        status='completed',
+        pending_action='',
+        last_event='review_completed'
+    )
+    handler.store.emit_event(
+        envelope.collab_id,
+        'review_completed',
+        review_result=result['review_result'],
+        review_judgment_path=result.get('judgment_path', ''),
+        draft_chars=result.get('draft_chars', 0)
+    )
+
+    # ── Step 5: Notify Alex via Telegram ───────────────────────────
+    try:
+        from governance.collab.notify import send_telegram_notification_async
+        send_telegram_notification_async(
+            f"*Foundation Review Complete*\n"
+            f"Collab: `{envelope.collab_id}`\n"
+            f"Draft: {result.get('draft_chars', 0)} chars\n"
+            f"Result: *{result['review_result'].upper()}*\n"
+            f"Judgment: {result.get('judgment_path', 'N/A')}"
+        )
+    except Exception as e:
+        handler._log("WARN", f"[{envelope.collab_id}] Telegram notification failed: {e}")
+
+    return 'review_completed'
 
 
 def _build_envelope(
@@ -358,7 +439,7 @@ async def _handle_complete(handler: 'CollabHandler', envelope: CollabEnvelope) -
 
 
 async def _handle_exit(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
-    """Handle 'exit' — mark collab exited."""
+    """Handle 'exit' — mark collab exited with Telegram notification."""
     handler.store.update_collab(
         envelope.collab_id,
         status='exited',
@@ -370,6 +451,18 @@ async def _handle_exit(handler: 'CollabHandler', envelope: CollabEnvelope) -> st
         'collab_exited',
         message_id=envelope.message_id
     )
+    # Notify Alex: human-visible termination signal
+    try:
+        from governance.collab.notify import send_telegram_notification_async
+        exit_note = envelope.payload.get('reason', '') if envelope.payload else ''
+        send_telegram_notification_async(
+            f"*Foundation Create — EXITED*\n"
+            f"Collab: `{envelope.collab_id}`\n"
+            f"By: {envelope.from_}\n"
+            f"Reason: {exit_note or 'No reason provided'}"
+        )
+    except Exception as e:
+        handler._log("WARN", f"[{envelope.collab_id}] Telegram notification failed: {e}")
     return 'collab_exited'
 
 
