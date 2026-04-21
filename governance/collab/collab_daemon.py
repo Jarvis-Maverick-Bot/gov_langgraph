@@ -342,6 +342,8 @@ class CollabDaemon:
                 last_processed_by=self.instance_id,
             )
 
+            self._log("INFO", f"  -> [EVENT_DRIVEN] {envelope.message_type} dispatched")
+
             success = await self.handler.handle_inbound(envelope)
             self._log("INFO", f"  -> processed {'OK' if success else 'FAILED'}")
 
@@ -392,11 +394,11 @@ class CollabDaemon:
             action = c.pending_action
 
             if action == 'process_review':
-                self._log("WORKER", f"collab_id={c.collab_id} -> process_review (Phase 2 will dispatch skill)")
+                self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} -> process_review (worker sweep, not event-driven)")
             elif action == 'awaiting_artifact':
-                self._log("WORKER", f"collab_id={c.collab_id} still waiting for artifact")
+                self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} still waiting for artifact")
             else:
-                self._log("WORKER", f"collab_id={c.collab_id} pending_action={action} (no auto-action)")
+                self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} pending_action={action} (no auto-action)")
 
     # ── Heartbeat ─────────────────────────────────────────────────────
 

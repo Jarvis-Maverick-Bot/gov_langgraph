@@ -1,6 +1,7 @@
 """
 NATS Collaboration Mechanism - Message Handler
-Processes inbound commands, emits ACKs, updates state, fires events
+Event-driven skill dispatch from listener callback.
+Phase 2: handlers are concrete, worker is recovery sweep only.
 """
 
 import asyncio
@@ -20,6 +21,164 @@ SUBJECTS = {
 }
 
 
+# ── Skill Handler Registry (Phase 2) ───────────────────────────────────
+# Maps message_type → async handler function.
+# Each handler: async def handler(handler: CollabHandler, envelope: CollabEnvelope) -> str
+# Returns a result description string.
+
+async def _handle_open(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'open' — create new collab, no further action."""
+    handler.store.update_collab(
+        envelope.collab_id,
+        status='open',
+        current_owner=envelope.from_
+    )
+    return 'collab_opened'
+
+
+async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """
+    Handle 'review_request' — skill dispatch entry point.
+    The handler processes the review and sets pending_action accordingly.
+    For Phase 2 proof-of-concept: just mark in_progress.
+    """
+    handler.store.update_collab(
+        envelope.collab_id,
+        status='in_progress',
+        current_owner=handler.my_id,
+        pending_action='process_review'
+    )
+    # Log skill dispatch
+    handler.store.emit_event(
+        envelope.collab_id,
+        'skill_dispatched',
+        message_id=envelope.message_id,
+        skill='review_request',
+        summary=envelope.summary
+    )
+    return 'review_started'
+
+
+async def _handle_review_response(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'review_response' — record review result, close review."""
+    handler.store.update_collab(
+        envelope.collab_id,
+        last_event='review_received',
+        pending_action=''
+    )
+    handler.store.emit_event(
+        envelope.collab_id,
+        'review_received',
+        message_id=envelope.message_id
+    )
+    return 'review_received'
+
+
+async def _handle_decision_proposal(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'decision_proposal' — record proposal, set pending_action."""
+    handler.store.update_collab(
+        envelope.collab_id,
+        last_event='decision_proposed',
+        pending_action='awaiting_decision'
+    )
+    handler.store.emit_event(
+        envelope.collab_id,
+        'decision_proposed',
+        message_id=envelope.message_id
+    )
+    return 'decision_proposal_received'
+
+
+async def _handle_decision_response(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'decision_response' — record decision, clear pending_action."""
+    handler.store.update_collab(
+        envelope.collab_id,
+        last_event='decision_resolved',
+        pending_action=''
+    )
+    handler.store.emit_event(
+        envelope.collab_id,
+        'decision_resolved',
+        message_id=envelope.message_id
+    )
+    return 'decision_response_received'
+
+
+async def _handle_complete(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'complete' — mark collab completed."""
+    handler.store.update_collab(
+        envelope.collab_id,
+        status='completed',
+        last_event='collab_completed',
+        pending_action=''
+    )
+    handler.store.emit_event(
+        envelope.collab_id,
+        'collab_completed',
+        message_id=envelope.message_id
+    )
+    return 'collab_completed'
+
+
+async def _handle_exit(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'exit' — mark collab exited."""
+    handler.store.update_collab(
+        envelope.collab_id,
+        status='exited',
+        last_event='collab_exited',
+        pending_action=''
+    )
+    handler.store.emit_event(
+        envelope.collab_id,
+        'collab_exited',
+        message_id=envelope.message_id
+    )
+    return 'collab_exited'
+
+
+async def _handle_notify(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'notify' — log notification, no state change needed."""
+    handler.store.emit_event(
+        envelope.collab_id,
+        'notification_sent',
+        message_id=envelope.message_id,
+        payload=envelope.payload
+    )
+    return 'notification_sent'
+
+
+async def _handle_ping(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Handle 'ping' — respond with pong."""
+    return 'acknowledged'
+
+
+async def _handle_unknown(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
+    """Fallback for unknown message types."""
+    handler.store.emit_event(
+        envelope.collab_id,
+        'unknown_message_type',
+        message_id=envelope.message_id,
+        message_type=envelope.message_type
+    )
+    return 'unknown_message_type'
+
+
+# Registry — maps message_type to skill handler
+SKILL_REGISTRY: Dict[str, Callable] = {
+    'open': _handle_open,
+    'review_request': _handle_review_request,
+    'review_response': _handle_review_response,
+    'decision_proposal': _handle_decision_proposal,
+    'decision_response': _handle_decision_response,
+    'complete': _handle_complete,
+    'exit': _handle_exit,
+    'notify': _handle_notify,
+    'ping': _handle_ping,
+    'pong': _handle_ping,
+    # 'ack' is handled via handle_ack, not here
+}
+
+
 class CollabHandler:
     """
     Main handler for inbound collaboration messages.
@@ -27,10 +186,9 @@ class CollabHandler:
     Responsibilities:
     1. Validate incoming envelope
     2. Persist to durable store
-    3. Emit ACK (received)
-    4. Process the message
-    5. Emit event
-    6. Emit ACK (processed)
+    3. Emit received ACK
+    4. Dispatch to skill handler (Phase 2: event-driven)
+    5. Emit processed ACK
     """
 
     def __init__(self, nats_client, state_store: CollabStateStore, my_id: str):
@@ -41,21 +199,22 @@ class CollabHandler:
 
     async def handle_inbound(self, envelope: CollabEnvelope) -> bool:
         """
-        Process an inbound message.
+        Process an inbound message — event-driven primary path.
         Returns True if processed successfully.
+        Phase 2: skill dispatch happens here, no poll wait.
         """
         # 1. Validate
         if not self._validate(envelope):
             return False
 
-        # 2. Drop non-target messages — only the intended recipient processes
+        # 2. Selective receive: only process if addressed to this agent
         if envelope.to != self.my_id:
             return False
 
         # 3. Log inbound
         self.store.log_message(envelope.as_dict(), direction='inbound')
 
-        # 3. Ensure collab exists in store
+        # 4. Ensure collab exists in store
         self.store.get_or_create_collab(
             collab_id=envelope.collab_id,
             opened_by=envelope.from_,
@@ -63,27 +222,21 @@ class CollabHandler:
             artifact_path=envelope.artifact_path
         )
 
-        # 4. Update collab state
+        # 5. Update collab state to in_progress
         self.store.update_collab(
             envelope.collab_id,
             last_message_id=envelope.message_id,
-            current_owner=self.my_id if envelope.to == self.my_id else envelope.to,
+            current_owner=self.my_id,
             status='in_progress'
         )
 
-        # 5. Emit received ACK
+        # 6. Emit received ACK — we got the message
         await self._send_ack(envelope, 'received')
 
-        # 6. Process by message type
-        result = await self._process(envelope)
+        # 7. SKILL DISPATCH — Phase 2: event-driven, no poll wait
+        result = await self._skill_dispatch(envelope)
 
-        # 7. Emit event
-        event_type = self._event_for_message(envelope, result)
-        self.store.emit_event(envelope.collab_id, event_type,
-                              message_id=envelope.message_id,
-                              result=result)
-
-        # 8. Emit processed ACK
+        # 8. Emit processed ACK — we're done processing
         await self._send_ack(envelope, 'processed', result)
 
         return True
@@ -100,8 +253,17 @@ class CollabHandler:
             return False
         return True
 
+    async def _skill_dispatch(self, envelope: CollabEnvelope) -> str:
+        """
+        Phase 2: Look up handler from registry and dispatch.
+        Returns result string from the skill handler.
+        """
+        msg_type = envelope.message_type
+        handler_fn = SKILL_REGISTRY.get(msg_type, _handle_unknown)
+        return await handler_fn(self, envelope)
+
     async def _send_ack(self, for_envelope: CollabEnvelope, status: str, result: Optional[str] = None):
-        """Send ACK for a received message."""
+        """Send ACK for a message — received or processed."""
         ack = AckEnvelope(
             ack_for=for_envelope.message_id,
             collab_id=for_envelope.collab_id,
@@ -114,67 +276,15 @@ class CollabHandler:
         await self.nc.publish(SUBJECTS['ack'], payload)
         await self.nc.flush()
 
-        # Also log outbound ACK
+        # Log outbound ACK
         self.store.log_message(ack.as_dict(), direction='outbound')
 
-    async def _process(self, envelope: CollabEnvelope) -> str:
-        """Process message by type. Returns result string."""
-        msg_type = envelope.message_type
-
-        if msg_type == 'open':
-            return 'collab_opened'
-
-        elif msg_type == 'review_request':
-            # Caller wants us to review something
-            # State store already updated; caller handles actual review
-            return 'review_started'
-
-        elif msg_type == 'review_response':
-            return 'review_received'
-
-        elif msg_type == 'decision_proposal':
-            return 'decision_proposal_received'
-
-        elif msg_type == 'decision_response':
-            return 'decision_response_received'
-
-        elif msg_type == 'complete':
-            self.store.update_collab(envelope.collab_id, status='completed')
-            return 'collab_completed'
-
-        elif msg_type == 'exit':
-            self.store.update_collab(envelope.collab_id, status='exited')
-            return 'collab_exited'
-
-        elif msg_type in ('ping', 'pong', 'ack'):
-            return 'acknowledged'
-
-        elif msg_type == 'event':
-            return envelope.payload.get('event', 'event_processed')
-
-        elif msg_type == 'notify':
-            return 'notification_sent'
-
-        else:
-            return 'unknown_message_type'
-
-    def _event_for_message(self, envelope: CollabEnvelope, result: str) -> str:
-        """Map message type + result to canonical event name."""
-        msg_type = envelope.message_type
-        if msg_type == 'open':
-            return 'collab_opened'
-        elif msg_type == 'review_request' and result == 'review_started':
-            return 'review_started'
-        elif msg_type == 'review_response' and result == 'review_received':
-            return 'review_received'
-        elif msg_type == 'decision_proposal' and result == 'decision_proposal_received':
-            return 'decision_proposed'
-        elif msg_type == 'complete' and result == 'collab_completed':
-            return 'collab_closed'
-        elif msg_type == 'exit' and result == 'collab_exited':
-            return 'collab_closed'
-        else:
-            return f'event_{result}'
+    async def handle_ack(self, ack: AckEnvelope):
+        """Handle incoming ACK - complete the pending future."""
+        if ack.ack_for in self._pending_ack:
+            future = self._pending_ack[ack.ack_for]
+            if not future.done():
+                future.set_result(ack)
 
     async def send_command(self, collab_id: str, to: str, message_type: str,
                            summary: str = "", payload: Optional[dict] = None,
@@ -221,9 +331,9 @@ class CollabHandler:
         # Wait for ACK
         try:
             ack = await self._wait_for_ack(envelope.message_id, timeout)
-            return True, ack  # sent=True, ack received
+            return True, ack
         except asyncio.TimeoutError:
-            return True, None  # sent=True (published OK), but ACK timed out
+            return True, None
 
     async def _wait_for_ack(self, message_id: str, timeout: float) -> Optional[AckEnvelope]:
         """Wait for ACK for a specific message."""
@@ -233,13 +343,6 @@ class CollabHandler:
             return await asyncio.wait_for(future, timeout)
         finally:
             self._pending_ack.pop(message_id, None)
-
-    async def handle_ack(self, ack: AckEnvelope):
-        """Handle incoming ACK - complete the pending future."""
-        if ack.ack_for in self._pending_ack:
-            future = self._pending_ack[ack.ack_for]
-            if not future.done():
-                future.set_result(ack)
 
     def get_collab_status(self, collab_id: str) -> Optional[dict]:
         """Get current status of a collaboration."""
