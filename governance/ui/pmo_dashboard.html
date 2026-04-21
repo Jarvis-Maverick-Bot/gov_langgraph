@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus — PMO Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; padding: 20px; }
+        h1 { color: #00d4ff; margin-bottom: 4px; font-size: 20px; }
+        .header-meta { font-size: 12px; color: #555; margin-bottom: 20px; }
+        h2 { color: #888; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 12px; border-bottom: 1px solid #1f2430; padding-bottom: 6px; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header-controls { display: flex; gap: 8px; align-items: center; }
+        .filter-group { display: flex; gap: 8px; align-items: center; }
+        .filter-group label { font-size: 12px; color: #666; }
+        select, button { background: #161b22; color: #e0e0e0; border: 1px solid #1f2430; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        button:hover { border-color: #00d4ff; }
+        .btn-danger { border-color: #ff6b6b; color: #ff6b6b; }
+        .btn-danger:hover { background: #ff6b6b; color: #000; }
+        .btn-primary { background: #00d4ff; color: #000; border: none; }
+        .btn-primary:hover { background: #00bce6; }
+
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 8px; }
+        .stat-card { background: #161b22; border: 1px solid #1f2430; border-radius: 8px; padding: 14px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; color: #00d4ff; }
+        .stat-card .label { font-size: 11px; color: #666; margin-top: 4px; text-transform: uppercase; }
+        .stat-card.warn .value { color: #facc15; }
+        .stat-card.danger .value { color: #ff6b6b; }
+        .stat-card.success .value { color: #4ade80; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 11px; color: #555; text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid #1f2430; }
+        td { padding: 9px 10px; font-size: 12px; border-bottom: 1px solid #1a1f28; }
+        tr:hover { background: #161b22; }
+        tr.stale { background: #1a1a14; }
+        tr.stale:hover { background: #252518; }
+
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .status-open { background: #1a3a1a; color: #4ade80; }
+        .status-in_progress { background: #2a2a1a; color: #facc15; }
+        .status-completed { background: #1a2a3a; color: #60a5fa; }
+        .status-exited { background: #2a1a1a; color: #f87171; }
+
+        .pending-action { font-size: 11px; color: #facc15; font-style: italic; }
+        .owner { color: #888; }
+        .owner.self { color: #4ade80; }
+
+        .stale-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: #3a2a0a; color: #ff9800; }
+        .stale-badge::before { content: '⚠ '; }
+
+        .msg-status { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+        .msg-status.pending { background: #2a2a1a; color: #facc15; }
+        .msg-status.acked { background: #1a3a1a; color: #4ade80; }
+        .msg-status.stale { background: #3a1a1a; color: #ff6b6b; }
+
+        .log-entry { font-size: 12px; padding: 8px 12px; border-left: 2px solid #1f2430; margin: 3px 0; }
+        .log-entry.inbound { border-left-color: #4ade80; }
+        .log-entry.outbound { border-left-color: #60a5fa; }
+        .log-entry.event { border-left-color: #facc15; }
+        .log-ts { color: #444; margin-right: 8px; }
+        .log-type { color: #666; margin-right: 8px; }
+        .log-msg-id { color: #00d4ff; font-size: 10px; }
+        .log-inout { font-size: 10px; padding: 1px 4px; border-radius: 3px; margin-right: 4px; }
+        .log-inout.in { background: #1a3a1a; color: #4ade80; }
+        .log-inout.out { background: #1a2a3a; color: #60a5fa; }
+
+        #clear-panel { display: none; background: #161b22; border: 1px solid #ff6b6b; border-radius: 8px; padding: 16px; margin-top: 12px; }
+        #clear-panel.show { display: block; }
+        #clear-panel h3 { color: #ff6b6b; font-size: 14px; margin-bottom: 12px; }
+        #clear-panel p { color: #888; font-size: 12px; margin-bottom: 12px; }
+        .btn-group { display: flex; gap: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1>Nexus — PMO Dashboard</h1>
+        <div class="header-meta">Governed Collaboration Monitor · auto-refreshes every 10s</div>
+    </div>
+    <div class="header-controls">
+        <div class="filter-group">
+            <label>Filter:</label>
+            <select id="filter-status">
+                <option value="all">All</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="exited">Exited</option>
+            </select>
+            <select id="filter-owner">
+                <option value="all">All Owners</option>
+                <option value="jarvis">Jarvis</option>
+                <option value="nova">Nova</option>
+            </select>
+            <label style="margin-left:8px">Stale only:</label>
+            <input type="checkbox" id="filter-stale">
+        </div>
+        <button class="btn-danger" onclick="showClearPanel()">Clear</button>
+        <button class="btn-primary" onclick="load()">Refresh</button>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="stat-card">
+        <div class="value" id="stat-total">—</div>
+        <div class="label">Total Collabs</div>
+    </div>
+    <div class="stat-card warn">
+        <div class="value" id="stat-inprogress">—</div>
+        <div class="label">In Progress</div>
+    </div>
+    <div class="stat-card danger">
+        <div class="value" id="stat-stale">—</div>
+        <div class="label">Stale (unacked)</div>
+    </div>
+    <div class="stat-card success">
+        <div class="value" id="stat-pending">—</div>
+        <div class="label">Pending Action</div>
+    </div>
+</div>
+
+<div id="clear-panel">
+    <h3>⚠ Clear Collaboration History</h3>
+    <p>This will archive current state and start fresh. Active collabs will be preserved.</p>
+    <div class="btn-group">
+        <button class="btn-danger" onclick="clearHistory()">Clear Now</button>
+        <button onclick="hideClearPanel()">Cancel</button>
+    </div>
+</div>
+
+<h2>Active Collaborations</h2>
+<div id="collab-table">Loading...</div>
+
+<h2>Recent Messages <span id="msg-count" style="color:#555;font-size:11px;font-weight:normal"></span></h2>
+<div id="message-log">Loading...</div>
+
+<script>
+let allCollabs = [];
+let allMessages = [];
+
+function isStale(collab) {
+    // Stale = last_message_id != last_acknowledged_message_id
+    // means a message arrived but this node hasn't acknowledged it
+    return collab.last_message_id && collab.last_acknowledged_message_id &&
+           collab.last_message_id !== collab.last_acknowledged_message_id;
+}
+
+async function load() {
+    try {
+        const [stateRes, logRes] = await Promise.all([
+            fetch('/api/collabs'),
+            fetch('/api/messages')
+        ]);
+
+        const state = await stateRes.json();
+        const logText = await logRes.text();
+
+        allCollabs = Object.values(state);
+        allMessages = logText.trim().split('\n').filter(l => l.trim()).reverse(); // newest first
+
+        renderStats();
+        renderTable();
+        renderMessages();
+    } catch(e) {
+        document.getElementById('collab-table').innerHTML = '<div style="color:#f87171;padding:12px">Failed to load data: ' + e.message + '</div>';
+    }
+}
+
+function renderStats() {
+    const inProgress = allCollabs.filter(c => c.status === 'in_progress').length;
+    const stale = allCollabs.filter(isStale).length;
+    const pending = allCollabs.filter(c => c.pending_action && c.pending_action !== '').length;
+
+    document.getElementById('stat-total').textContent = allCollabs.length;
+    document.getElementById('stat-inprogress').textContent = inProgress;
+    document.getElementById('stat-stale').textContent = stale;
+    document.getElementById('stat-pending').textContent = pending;
+}
+
+function renderTable() {
+    const statusFilter = document.getElementById('filter-status').value;
+    const ownerFilter = document.getElementById('filter-owner').value;
+    const staleOnly = document.getElementById('filter-stale').checked;
+
+    let filtered = allCollabs.filter(c => {
+        if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+        if (ownerFilter !== 'all' && c.current_owner !== ownerFilter) return false;
+        if (staleOnly && !isStale(c)) return false;
+        return true;
+    });
+
+    filtered.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+
+    let html = `<table><thead><tr>
+        <th>Collab ID</th>
+        <th>Status</th>
+        <th>Sender / Receiver</th>
+        <th>Owner</th>
+        <th>Pending Action</th>
+        <th>Last Event</th>
+        <th>Msg Status</th>
+        <th>Updated</th>
+    </tr></thead><tbody>`;
+
+    filtered.forEach(c => {
+        const stale = isStale(c);
+        const rowClass = stale ? 'stale' : '';
+        const staleBadge = stale ? '<span class="stale-badge">STALE</span>' : '';
+        const msgStatus = stale ? 'stale' : (c.last_acknowledged_message_id ? 'acked' : 'pending');
+        const msgStatusLabel = stale ? 'STALE' : (msgStatus === 'acked' ? 'ACKED' : 'PENDING');
+        const ts = c.updated_at ? new Date(c.updated_at).toLocaleString('en-GB', {hour12: false}) : '—';
+
+        html += `<tr class="${rowClass}">
+            <td><span class="log-msg-id">${c.collab_id}</span> ${staleBadge}</td>
+            <td><span class="status-badge status-${c.status}">${c.status}</span></td>
+            <td style="font-size:11px;color:#666">${c.opened_by || '?'} → ${c.current_owner || '?'}</td>
+            <td><span class="owner${c.current_owner === 'jarvis' ? ' self' : ''}">${c.current_owner || '—'}</span></td>
+            <td><span class="pending-action">${c.pending_action || '—'}</span></td>
+            <td>${c.last_event || '—'}</td>
+            <td><span class="msg-status ${msgStatus}">${msgStatusLabel}</span></td>
+            <td style="color:#555;font-size:11px">${ts}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('collab-table').innerHTML = filtered.length ? html : '<div style="color:#555;padding:12px">No collabs match filter</div>';
+}
+
+function renderMessages() {
+    const last30 = allMessages.slice(0, 30);
+    let html = '';
+
+    last30.forEach(line => {
+        try {
+            const entry = JSON.parse(line);
+            const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString('en-GB', {hour12: false}) : '';
+            const dir = entry.direction || 'event';
+            const inout = entry.direction === 'inbound'
+                ? '<span class="log-inout in">IN</span>'
+                : entry.direction === 'outbound'
+                ? '<span class="log-inout out">OUT</span>'
+                : '';
+
+            html += `<div class="log-entry ${dir}">
+                <span class="log-ts">${ts}</span>
+                ${inout}
+                <span class="log-msg-id">${entry.message_id || entry.collab_id}</span>
+                ${entry.message_type ? `<span style="color:#facc15;margin-left:4px">${entry.message_type}</span>` : ''}
+                ${entry.from_ ? `<span style="color:#888;margin-left:6px">${entry.from_}→${entry.to}</span>` : ''}
+                ${entry.summary ? `<span style="color:#555;margin-left:8px;font-size:11px">${entry.summary.substring(0,60)}</span>` : ''}
+            </div>`;
+        } catch(e) {}
+    });
+
+    document.getElementById('msg-count').textContent = `(${allMessages.length} total)`;
+    document.getElementById('message-log').innerHTML = html || '<div style="color:#555;padding:12px">No messages yet</div>';
+}
+
+function showClearPanel() {
+    document.getElementById('clear-panel').classList.add('show');
+}
+
+function hideClearPanel() {
+    document.getElementById('clear-panel').classList.remove('show');
+}
+
+async function clearHistory() {
+    if (!confirm('Archive current state and clear? This cannot be undone.')) return;
+    try {
+        const res = await fetch('../api/clear-history', { method: 'POST' });
+        if (res.ok) {
+            hideClearPanel();
+            load();
+        } else {
+            alert('Clear failed: ' + await res.text());
+        }
+    } catch(e) {
+        alert('Clear error: ' + e.message);
+    }
+}
+
+// Filters
+document.getElementById('filter-status').addEventListener('change', renderTable);
+document.getElementById('filter-owner').addEventListener('change', renderTable);
+document.getElementById('filter-stale').addEventListener('change', renderTable);
+
+load();
+setInterval(load, 10000);
+</script>
+
+</body>
+</html>
