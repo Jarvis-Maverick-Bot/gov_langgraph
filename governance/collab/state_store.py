@@ -72,11 +72,15 @@ class CollabStateStore:
         try:
             with open(self.state_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                # Unwrap legacy {"collabs": {...}} wrapper if present
+                if isinstance(data, dict) and 'collabs' in data and isinstance(data['collabs'], dict):
+                    data = data['collabs']
                 return data
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
     def _write_state(self, data: Dict[str, Any]):
+        # Flat format: {collab_id: state_dict, ...}
         with open(self.state_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
