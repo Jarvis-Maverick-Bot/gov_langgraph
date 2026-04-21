@@ -45,7 +45,6 @@
 
         .pending-action { font-size: 11px; color: #facc15; font-style: italic; }
         .owner { color: #888; }
-        .owner.self { color: #4ade80; }
 
         .stale-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: #3a2a0a; color: #ff9800; }
         .stale-badge::before { content: '⚠ '; }
@@ -124,7 +123,7 @@
 
 <div id="clear-panel">
     <h3>⚠ Clear Collaboration History</h3>
-    <p>This will archive current state and start fresh. Active collabs will be preserved.</p>
+    <p>This will archive all current state and message history, then reset to empty.</p>
     <div class="btn-group">
         <button class="btn-danger" onclick="clearHistory()">Clear Now</button>
         <button onclick="hideClearPanel()">Cancel</button>
@@ -215,14 +214,14 @@ function renderTable() {
         const ts = c.updated_at ? new Date(c.updated_at).toLocaleString('en-GB', {hour12: false}) : '—';
 
         html += `<tr class="${rowClass}">
-            <td><span class="log-msg-id">${c.collab_id}</span> ${staleBadge}</td>
+            <td><span class="log-msg-id">${c.collab_id}</span></td>
             <td><span class="status-badge status-${c.status}">${c.status}</span></td>
             <td><span style="color:#888">${c.opened_by || '—'}</span></td>
             <td><span style="color:#60a5fa">${c.receiver || '—'}</span></td>
-            <td><span class="owner${c.current_owner === 'jarvis' ? ' self' : ''}">${c.current_owner || '—'}</span></td>
+            <td><span class="owner">${c.current_owner || '—'}</span></td>
             <td><span class="pending-action">${c.pending_action || '—'}</span></td>
             <td>${c.last_event || '—'}</td>
-            <td><span class="msg-status ${msgStatus}">${msgStatusLabel}</span></td>
+            <td><span class="msg-status">—</span></td>
             <td style="color:#555;font-size:11px">${ts}</td>
         </tr>`;
     });
@@ -240,9 +239,9 @@ function renderMessages() {
             const entry = JSON.parse(line);
             const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString('en-GB', {hour12: false}) : '';
             const dir = entry.direction || 'event';
-            const inout = entry.direction === 'inbound'
+            const inout = entry.direction === 'IN'
                 ? '<span class="log-inout in">IN</span>'
-                : entry.direction === 'outbound'
+                : entry.direction === 'OUT'
                 ? '<span class="log-inout out">OUT</span>'
                 : '';
 
@@ -251,7 +250,7 @@ function renderMessages() {
                 ${inout}
                 <span class="log-msg-id">${entry.message_id || entry.collab_id}</span>
                 ${entry.message_type ? `<span style="color:#facc15;margin-left:4px">${entry.message_type}</span>` : ''}
-                ${entry.from_ ? `<span style="color:#888;margin-left:6px">${entry.from_}→${entry.to}</span>` : ''}
+                ${entry.from ? `<span style="color:#888;margin-left:6px">${entry.from}→${entry.to}</span>` : ''}
                 ${entry.summary ? `<span style="color:#555;margin-left:8px;font-size:11px">${entry.summary.substring(0,60)}</span>` : ''}
             </div>`;
         } catch(e) {}
