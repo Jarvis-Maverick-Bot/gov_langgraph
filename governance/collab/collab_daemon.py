@@ -390,23 +390,50 @@ class CollabDaemon:
                 self._log("ERROR", f"Worker loop error: {e}")
 
     async def _poll_workers(self):
-        """Recovery sweep: check in_progress collabs deferred by event-driven path.
-        
-        This is NOT primary dispatch. The event-driven listener handles new messages.
-        This sweep handles: deferred items (awaiting artifact), stalled items (timeout),
-        restart recovery. Logged as [RECOVERY_SWEEP] to make the distinction clear.
+        """Worker loop: checks for collabs with pending_action and executes tasks.
+
+        Option B: worker triggers executor (not a separate sub-agent).
+        When pending_action is set, worker constructs task context and calls executor.
+        Worker does NOT execute business logic itself — it triggers the defined execution path.
         """
-        collabs = self.store.list_collabs(status='in_progress')
+        from governance.collab.foundation_executor import execute_foundation_delivery, get_task_context
+
+        collabs = self.store.list_collabs(status='open')
         if not collabs:
             return
 
         for c in collabs:
             action = c.pending_action
 
-            if action == 'process_review':
-                self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} -> process_review (worker sweep, not event-driven)")
+            if action == 'awaiting_foundation_draft':
+                self._log("WORKER", f"[TASK_EXEC] collab_id={c.collab_id} pending_action={action} — triggering executor")
+
+                # Construct task context from command_intent
+                # We get command_intent from the collab's last_event or stored payload
+                command_intent = 'start_foundation_delivery'  # default for foundation_create
+
+                # Get task context from workflow registry
+                task_context = get_task_context(
+                    collab_id=c.collab_id,
+                    command_intent=command_intent,
+                    payload={'source': 'worker_recovery'}
+                )
+
+                self._log("WORKER", f"[TASK_EXEC] collab_id={c.collab_id} doctrine_set={task_context.get('doctrine_loading_set')}")
+
+                # Execute — this calls the handler which loads doctrine, produces artifact, updates state
+                try:
+                    await execute_foundation_delivery(self.handler, c.collab_id, task_context)
+                    self._log("WORKER", f"[TASK_EXEC] collab_id={c.collab_id} executor completed")
+                except Exception as e:
+                    self._log("ERROR", f"[TASK_EXEC] collab_id={c.collab_id} executor failed: {e}")
+                    # Mark as failed
+                    self.store.update_collab(c.collab_id, status='failed', last_event='executor_error', pending_action='')
+
             elif action == 'awaiting_artifact':
                 self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} still waiting for artifact")
+            elif action == 'process_review':
+                self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} -> process_review (worker sweep, not event-driven)")
             else:
                 self._log("WORKER", f"[RECOVERY_SWEEP] collab_id={c.collab_id} pending_action={action} (no auto-action)")
 

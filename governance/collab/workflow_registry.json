@@ -1,0 +1,64 @@
+{
+  "_comment": "Workflow semantic registry — maps command_intent to task context for Option B executor.",
+  "_comment2": "When command_intent matches, task context provides: doctrine_loading_set, artifact_binding, completion_criteria.",
+  "_comment3": "This is the key layer between command parsing and handler execution.",
+
+  "workflows": {
+    "v2_0": {
+      "description": "V2.0 release governed execution workflow",
+      "stages": {
+        "foundation_create": {
+          "command_intent": "start_foundation_delivery",
+          "description": "Begin V2.0 Foundation document delivery workflow",
+          "doctrine_loading_set": [
+            "v2_0_foundation_baseline",
+            "v2_0_scope",
+            "v2_0_prd"
+          ],
+          "artifact_binding": {
+            "output_artifact": "V2_0_FOUNDATION.md",
+            "artifact_type": "foundation",
+            "output_path": "governance/docs/V2_0_FOUNDATION.md"
+          },
+          "skill_handler_binding": {
+            "handler": "_handle_start_foundation_create",
+            "executor": "foundation_executor.execute_foundation_delivery",
+            "skill": "foundation_delivery"
+          },
+          "expected_output": {
+            "message_type": "foundation_draft_ready",
+            "artifacts_produced": ["governance/docs/V2_0_FOUNDATION.md"],
+            "completion_signal": "foundation_delivered"
+          },
+          "completion_criteria": {
+            "success": {
+              "status": "in_progress",
+              "pending_action": "",
+              "last_event": "foundation_draft_ready"
+            },
+            "failure": {
+              "status": "failed",
+              "last_event": "doctrine_load_failed OR artifact_write_failed"
+            }
+          },
+          "notification_events": {
+            "must_notify": [
+              "workflow_started",
+              "foundation_draft_ready",
+              "workflow_completed",
+              "blocked",
+              "failed_after_retries",
+              "human_decision_required",
+              "escalated"
+            ],
+            "dashboard_only": [
+              "ack_received",
+              "event_acknowledged",
+              "routine_internal_transition"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

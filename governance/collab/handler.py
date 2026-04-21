@@ -296,6 +296,15 @@ class CollabHandler:
         self.my_id = my_id  # 'jarvis' or 'nova'
         self._pending_ack: Dict[str, asyncio.Future] = {}
 
+    def _log(self, level: str, line: str):
+        """Log via daemon's log path (uses store's log path)."""
+        from governance.collab.collab_daemon import _log_to_file, _paths
+        try:
+            p = _paths()
+            _log_to_file(level, f"[{self.my_id}] {line}", p['daemon_log'])
+        except Exception:
+            print(f"[{level}] [{self.my_id}] {line}")
+
     async def handle_inbound(self, envelope: CollabEnvelope) -> bool:
         """
         Process an inbound message — event-driven primary path.
