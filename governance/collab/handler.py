@@ -18,26 +18,18 @@ from .envelope import CollabEnvelope, AckEnvelope, VALID_MESSAGE_TYPES
 from .state_store import CollabStateStore
 
 
-def _load_config() -> dict:
-    config_path = Path(__file__).parent / "collab_config.json"
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            return json.load(f)
-    return {}
-
-
-_config = _load_config()
-_SUBJECTS = _config.get("subjects", {
+# ── Subjects ───────────────────────────────────────────────────────────────────
+_SUBJECTS = {
     'command': 'gov.collab.command',
     'ack': 'gov.collab.ack',
     'event': 'gov.collab.event',
-    'notify': 'gov.collab.notify'
-})
+    'notify': 'gov.collab.notify',
+}
 
 
 class _SubjectDict(dict):
-    """dict subclass so existing code using SUBJECTS['key'] keeps working."""
-    pass
+    def __getitem__(self, key):
+        return super().__getitem__(key)
 
 
 SUBJECTS = _SubjectDict(_SUBJECTS)
@@ -92,30 +84,16 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
         envelope.collab_id,
         'foundation_create_started',
         message_id=envelope.message_id,
-        command_intent=envelope.payload.get('command_intent', 'start_foundation_delivery'),
-        workflow='v2_0',
-        stage='foundation_create',
         artifact_type='foundation',
-        artifact_path='governance/docs/V2_0_FOUNDATION.md'
+        from_=envelope.from_
     )
     return 'foundation_create_started'
 
 
 async def _handle_foundation_draft_ready(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
     """
-    Handle 'foundation_draft_ready' — confirms foundation draft is ready for review.
-    Triggered by the foundation_delivery skill after artifact is produced.
-
-    Business logic:
-    1. Update collab status to 'in_progress'
-    2. Clear pending_action (draft is done)
-    3. Set last_event to 'foundation_draft_ready'
-    4. Emit event for audit trail
-
-    Completion criteria:
-    - collab.status = 'in_progress'
-    - collab.pending_action = ''
-    - collab.last_event = 'foundation_draft_ready'
+    Handle 'foundation_draft_ready' — mark that the Foundation draft is available.
+    Used by the executor to signal draft completion.
     """
     handler.store.update_collab(
         envelope.collab_id,
@@ -136,10 +114,10 @@ async def _handle_foundation_draft_ready(handler: 'CollabHandler', envelope: Col
 async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
     """
     Handle 'review_request' — Nova hands over draft to Jarvis for review.
-    
+
     Nova (primary executor) has produced a real Foundation draft.
     Jarvis (reviewer) receives it here and sets up review task.
-    
+
     Payload expected:
       - command_intent: 'foundation_review_handover'
       - artifact_path: real path to Nova's draft
@@ -182,7 +160,23 @@ async def _handle_review_request(handler: 'CollabHandler', envelope: CollabEnvel
 
 
 async def _handle_review_response(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
-    """Handle 'review_response' — record review result, close review."""
+    """
+    Handle 'review_response' — record review result.
+
+    Behavior differs by agent:
+    - Jarvis receives review_response from Nova (should not happen in normal flow for now)
+    - Nova receives review_response from Jarvis: auto-decide next step based on review_result
+
+    Nova auto-follow-up logic (review_result-based):
+    - approved: send complete to Jarvis + Telegram notify Alex
+    - revision_required: update state for Nova's next draft iteration
+    - blocked: Telegram notify Alex with blocker summary
+    """
+    payload = envelope.payload or {}
+    review_result = payload.get('review_result', 'unknown')
+    review_notes = payload.get('review_notes', '')
+    review_judgment_path = payload.get('review_artifact_path', '')
+
     handler.store.update_collab(
         envelope.collab_id,
         last_event='review_received',
@@ -191,8 +185,75 @@ async def _handle_review_response(handler: 'CollabHandler', envelope: CollabEnve
     handler.store.emit_event(
         envelope.collab_id,
         'review_received',
-        message_id=envelope.message_id
+        message_id=envelope.message_id,
+        review_result=review_result,
+        review_notes=review_notes
     )
+
+    # Nova auto-follow-up: when Nova receives review_response from Jarvis
+    if handler.my_id == 'nova':
+        if review_result == 'approved':
+            # Step 6: send complete to Jarvis
+            try:
+                complete_envelope = {
+                    'message_type': 'complete',
+                    'collab_id': envelope.collab_id,
+                    'from': 'nova',
+                    'to': 'jarvis',
+                    'summary': 'Foundation Create workflow complete — approved by Jarvis review',
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'payload': {
+                        'workflow': 'v2_0',
+                        'stage': 'foundation_create_review',
+                        'review_result': review_result,
+                        'review_judgment_path': review_judgment_path
+                    }
+                }
+                await handler.nc.publish('gov.collab.command', json.dumps(complete_envelope).encode())
+                await handler.nc.flush()
+                handler._log("EXEC", f"[{envelope.collab_id}] complete sent to Jarvis")
+            except Exception as e:
+                handler._log("ERROR", f"[{envelope.collab_id}] failed to send complete: {e}")
+
+            # Step 7: Telegram notify Alex
+            try:
+                from governance.collab.notify import send_telegram_notification_async
+                send_telegram_notification_async(
+                    f"*Foundation Create — Complete*\n"
+                    f"Collab: `{envelope.collab_id}`\n"
+                    f"Result: *APPROVED*\n"
+                    f"Review judgment: {review_judgment_path or 'N/A'}\n"
+                    f"Status: Ready for next stage"
+                )
+                handler._log("EXEC", f"[{envelope.collab_id}] Telegram completion notification sent")
+            except Exception as e:
+                handler._log("WARN", f"[{envelope.collab_id}] Telegram notification failed: {e}")
+
+        elif review_result == 'revision_required':
+            handler.store.update_collab(envelope.collab_id, status='in_progress', pending_action='awaiting_revision')
+            try:
+                from governance.collab.notify import send_telegram_notification_async
+                send_telegram_notification_async(
+                    f"*Foundation Create — Revision Required*\n"
+                    f"Collab: `{envelope.collab_id}`\n"
+                    f"Notes: {review_notes[:200]}\n"
+                    f"Next: Nova revises draft and re-hands over"
+                )
+            except Exception:
+                pass
+
+        elif review_result == 'blocked':
+            try:
+                from governance.collab.notify import send_telegram_notification_async
+                send_telegram_notification_async(
+                    f"*Foundation Create — BLOCKED*\n"
+                    f"Collab: `{envelope.collab_id}`\n"
+                    f"Reason: {review_notes[:200]}\n"
+                    f"Human decision required"
+                )
+            except Exception:
+                pass
+
     return 'review_received'
 
 
@@ -215,15 +276,15 @@ async def _handle_decision_response(handler: 'CollabHandler', envelope: CollabEn
     """Handle 'decision_response' — record decision, clear pending_action."""
     handler.store.update_collab(
         envelope.collab_id,
-        last_event='decision_resolved',
+        last_event='decision_received',
         pending_action=''
     )
     handler.store.emit_event(
         envelope.collab_id,
-        'decision_resolved',
+        'decision_received',
         message_id=envelope.message_id
     )
-    return 'decision_response_received'
+    return 'decision_received'
 
 
 async def _handle_complete(handler: 'CollabHandler', envelope: CollabEnvelope) -> str:
@@ -332,163 +393,65 @@ class CollabHandler:
 
     async def handle_inbound(self, envelope: CollabEnvelope) -> bool:
         """
-        Process an inbound message — event-driven primary path.
-        Returns True if processed successfully.
-        Phase 2: skill dispatch happens here, no poll wait.
+        Main entry point for inbound messages.
+        Returns True if processed, False otherwise.
         """
-        # 1. Validate
-        if not self._validate(envelope):
+        try:
+            # 1. Validate
+            if not envelope.validate():
+                self._log("WARN", f"Invalid envelope: {envelope.message_id}")
+                return False
+
+            # 2. Persist to durable store
+            self.store.log_message(envelope.to_dict(), direction='IN')
+
+            # 3. Emit received ACK
+            await self._send_ack(envelope, 'received')
+
+            # 4. Dispatch to skill handler
+            handler_fn = SKILL_REGISTRY.get(envelope.message_type, _handle_unknown)
+            try:
+                result = await handler_fn(self, envelope)
+                self._log("HANDLER", f"[{envelope.collab_id}] {envelope.message_type} -> {result}")
+            except Exception as e:
+                self._log("ERROR", f"Handler error for {envelope.message_type}: {e}")
+                result = f'error: {e}'
+
+            # 5. Emit processed ACK
+            await self._send_ack(envelope, 'processed', result=result)
+
+            return True
+
+        except Exception as e:
+            self._log("ERROR", f"handle_inbound fatal: {e}")
             return False
 
-        # 2. Selective receive: only process if addressed to this agent
-        if envelope.to != self.my_id:
-            return False
-
-        # 3. Log inbound
-        self.store.log_message(envelope.as_dict(), direction='inbound')
-
-        # 4. Ensure collab exists in store
-        self.store.get_or_create_collab(
-            collab_id=envelope.collab_id,
-            opened_by=envelope.from_,
-            artifact_type=envelope.artifact_type,
-            artifact_path=envelope.artifact_path
-        )
-
-        # 5. Update collab state to in_progress
-        self.store.update_collab(
-            envelope.collab_id,
-            last_message_id=envelope.message_id,
-            current_owner=self.my_id,
-            status='in_progress'
-        )
-
-        # 6. Emit received ACK — we got the message
-        await self._send_ack(envelope, 'received')
-
-        # 7. SKILL DISPATCH — Phase 2: event-driven, no poll wait
-        result = await self._skill_dispatch(envelope)
-
-        # 8. Emit processed ACK — we're done processing
-        await self._send_ack(envelope, 'processed', result)
-
-        return True
-
-    def _validate(self, envelope: CollabEnvelope) -> bool:
-        """Validate envelope has required fields."""
-        if not envelope.collab_id:
-            return False
-        if not envelope.message_type:
-            return False
-        if not envelope.from_:
-            return False
-        if envelope.message_type not in VALID_MESSAGE_TYPES:
-            return False
-        return True
-
-    async def _skill_dispatch(self, envelope: CollabEnvelope) -> str:
+    async def handle_ack(self, ack: AckEnvelope) -> bool:
         """
-        Phase 2: Look up handler from registry and dispatch.
-        Returns result string from the skill handler.
+        Handle an ACK message — complete the pending Future.
+        Returns True if this ACK was expected and matched, False otherwise.
         """
-        msg_type = envelope.message_type
-        handler_fn = SKILL_REGISTRY.get(msg_type, _handle_unknown)
-        return await handler_fn(self, envelope)
+        key = f"{ack.collab_id}:{ack.ack_for}"
+        if key in self._pending_ack:
+            self._pending_ack[key].set_result(ack)
+            del self._pending_ack[key]
+            return True
+        return False
 
-    async def _send_ack(self, for_envelope: CollabEnvelope, status: str, result: Optional[str] = None):
-        """Send ACK for a message — received or processed."""
+    async def _send_ack(self, envelope: CollabEnvelope, ack_type: str, result: str = ''):
+        """Emit an ACK for this envelope."""
         ack = AckEnvelope(
-            ack_for=for_envelope.message_id,
-            collab_id=for_envelope.collab_id,
+            collab_id=envelope.collab_id,
+            message_id=envelope.message_id,
+            message_type=envelope.message_type,
+            ack_for=ack_type,
             from_=self.my_id,
-            to=for_envelope.from_,
-            status=status,
-            result=result
+            to=envelope.from_,
+            status='ok' if result != 'unknown_message_type' else 'unknown'
         )
-        payload = ack.to_json()
-        await self.nc.publish(SUBJECTS['ack'], payload)
-        await self.nc.flush()
-
-        # Log outbound ACK
-        self.store.log_message(ack.as_dict(), direction='outbound')
-
-    async def handle_ack(self, ack: AckEnvelope):
-        """Handle incoming ACK - complete the pending future."""
-        if ack.ack_for in self._pending_ack:
-            future = self._pending_ack[ack.ack_for]
-            if not future.done():
-                future.set_result(ack)
-
-    async def send_command(self, collab_id: str, to: str, message_type: str,
-                           summary: str = "", payload: Optional[dict] = None,
-                           artifact_type: Optional[str] = None,
-                           artifact_path: Optional[str] = None,
-                           wait_for_ack: bool = True,
-                           timeout: float = 10.0) -> tuple[bool, Optional[AckEnvelope]]:
-        """
-        Send a command message and optionally wait for ACK.
-        Returns (sent, ack_result).
-        """
-        envelope = CollabEnvelope(
-            collab_id=collab_id,
-            message_type=message_type,
-            from_=self.my_id,
-            to=to,
-            summary=summary,
-            payload=payload or {},
-            artifact_type=artifact_type,
-            artifact_path=artifact_path
-        )
-
-        # Log outbound
-        self.store.log_message(envelope.as_dict(), direction='outbound')
-
-        # Update collab state
-        self.store.get_or_create_collab(
-            collab_id=collab_id,
-            opened_by=self.my_id,
-            artifact_type=artifact_type,
-            artifact_path=artifact_path
-        )
-        self.store.update_collab(collab_id,
-                                 last_message_id=envelope.message_id,
-                                 current_owner=to)
-
-        # Publish
-        await self.nc.publish(SUBJECTS['command'], envelope.to_json())
-        await self.nc.flush()
-
-        if not wait_for_ack:
-            return True, None
-
-        # Wait for ACK
         try:
-            ack = await self._wait_for_ack(envelope.message_id, timeout)
-            return True, ack
-        except asyncio.TimeoutError:
-            return True, None
-
-    async def _wait_for_ack(self, message_id: str, timeout: float) -> Optional[AckEnvelope]:
-        """Wait for ACK for a specific message."""
-        future: asyncio.Future = asyncio.Future()
-        self._pending_ack[message_id] = future
-        try:
-            return await asyncio.wait_for(future, timeout)
-        finally:
-            self._pending_ack.pop(message_id, None)
-
-    def get_collab_status(self, collab_id: str) -> Optional[dict]:
-        """Get current status of a collaboration."""
-        collab = self.store.get_collab(collab_id)
-        if not collab:
-            return None
-        messages = self.store.get_messages(collab_id)
-        return {
-            "collab_id": collab_id,
-            "status": collab.status,
-            "current_owner": collab.current_owner,
-            "last_message_id": collab.last_message_id,
-            "last_event": collab.last_event,
-            "pending_action": collab.pending_action,
-            "message_count": len(messages)
-        }
+            payload = ack.to_json()
+            await self.nc.publish(SUBJECTS['ack'], payload)
+            await self.nc.flush()
+        except Exception as e:
+            self._log("ERROR", f"Failed to send ACK: {e}")
