@@ -7,11 +7,12 @@ Run from this machine or any machine on the LAN with nats-py installed.
 import asyncio
 import json
 import uuid
+import os
 import sys
+from pathlib import Path
 from datetime import datetime, timezone
 
 from nats import connect
-
 
 SUBJECTS = {
     'command': 'gov.collab.command',
@@ -19,8 +20,19 @@ SUBJECTS = {
 }
 
 
+def _load_config() -> dict:
+    """Load collab_config.json from same directory as this script."""
+    config_path = Path(__file__).parent / "collab_config.json"
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    return {}
+
+
 async def main():
-    nats_url = sys.argv[1] if len(sys.argv) > 1 else "nats://192.168.31.64:4222"
+    # Load from config — no CLI args needed
+    config = _load_config()
+    nats_url = config.get("nats_url", "nats://192.168.31.64:4222")
 
     print(f"Connecting to {nats_url}...")
     nc = await connect(nats_url)
