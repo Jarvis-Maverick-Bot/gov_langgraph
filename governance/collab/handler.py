@@ -8,17 +8,35 @@ import asyncio
 import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional, Dict, Any
 from .envelope import CollabEnvelope, AckEnvelope, VALID_MESSAGE_TYPES
 from .state_store import CollabStateStore
 
 
-SUBJECTS = {
+def _load_config() -> dict:
+    config_path = Path(__file__).parent / "collab_config.json"
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+_config = _load_config()
+_SUBJECTS = _config.get("subjects", {
     'command': 'gov.collab.command',
     'ack': 'gov.collab.ack',
     'event': 'gov.collab.event',
     'notify': 'gov.collab.notify'
-}
+})
+
+
+class _SubjectDict(dict):
+    """dict subclass so existing code using SUBJECTS['key'] keeps working."""
+    pass
+
+
+SUBJECTS = _SubjectDict(_SUBJECTS)
 
 
 # ── Skill Handler Registry (Phase 2) ───────────────────────────────────

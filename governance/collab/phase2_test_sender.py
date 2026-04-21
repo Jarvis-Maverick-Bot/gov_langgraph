@@ -1,27 +1,18 @@
 """
 Phase 2 Test Sender — simulates Nova sending a review_request to Jarvis.
-Tests: event-driven dispatch + ACK return path.
-Run from this machine or any machine on the LAN with nats-py installed.
+Reads all values from local collab_config.json. No hardcoding.
 """
 
 import asyncio
 import json
 import uuid
-import os
-import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
 from nats import connect
 
-SUBJECTS = {
-    'command': 'gov.collab.command',
-    'ack': 'gov.collab.ack',
-}
-
 
 def _load_config() -> dict:
-    """Load collab_config.json from same directory as this script."""
     config_path = Path(__file__).parent / "collab_config.json"
     if config_path.exists():
         with open(config_path, 'r') as f:
@@ -30,20 +21,24 @@ def _load_config() -> dict:
 
 
 async def main():
-    # Load from config — no CLI args needed
     config = _load_config()
-    nats_url = config.get("nats_url", "nats://192.168.31.64:4222")
+
+    nats_url = config.get("nats_url", "nats://127.0.0.1:4222")
+    sender_id = config.get("sender_id", "nova")
+    target_id = config.get("my_id", "jarvis")
+    subjects = config.get("subjects", {
+        "command": "gov.collab.command",
+        "ack": "gov.collab.ack"
+    })
 
     print(f"Connecting to {nats_url}...")
     nc = await connect(nats_url)
     print("Connected.")
 
-    # Track ACKs received
     acks_received = []
     ack_event = asyncio.Event()
 
     async def handle_ack(msg):
-        """Handler for inbound ACK messages."""
         data = json.loads(msg.data.decode('utf-8'))
         print(f"\n[ACK RECEIVED] message_id={data.get('message_id')} "
               f"ack_for={data.get('ack_for')} status={data.get('status')} "
@@ -51,36 +46,35 @@ async def main():
         acks_received.append(data)
         ack_event.set()
 
-    # Step 1: Subscribe to gov.collab.ack BEFORE publishing
-    print("Subscribing to gov.collab.ack...")
-    await nc.subscribe(SUBJECTS['ack'], cb=handle_ack)
+    # Subscribe before publishing
+    print(f"Subscribing to {subjects['ack']}...")
+    await nc.subscribe(subjects['ack'], cb=handle_ack)
     await nc.flush()
     print("Subscription active. Now publishing command.\n")
 
-    # Step 2: Build and publish review_request
-    collab_id = f"phase2-test-self-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    # Build envelope — all values from config
+    collab_id = f"phase2-test-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     message_id = f"msg-{uuid.uuid4().hex[:12]}"
 
     envelope = {
         "message_id": message_id,
         "collab_id": collab_id,
         "message_type": "review_request",
-        "from": "nova",
-        "to": "jarvis",
+        "from": sender_id,
+        "to": target_id,
         "artifact_type": "phase2_test",
-        "artifact_path": __file__,
+        "artifact_path": str(Path(__file__).resolve()),
         "payload": {"test": True, "purpose": "phase2_ack_return_path"},
-        "summary": "Phase 2 self-test: ACK return path verification",
-        "protocol_version": "0.2",
+        "summary": f"Phase 2 test: from={sender_id} to={target_id}",
+        "protocol_version": config.get("protocol_version", "0.2"),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    print(f"Publishing review_request: collab_id={collab_id} message_id={message_id}")
-    await nc.publish(SUBJECTS['command'], json.dumps(envelope).encode('utf-8'))
+    print(f"Publishing: collab_id={collab_id} from={sender_id} to={target_id}")
+    await nc.publish(subjects['command'], json.dumps(envelope).encode('utf-8'))
     await nc.flush()
     print("Published. Waiting for ACK...\n")
 
-    # Step 3: Wait for ACK with timeout
     try:
         await asyncio.wait_for(ack_event.wait(), timeout=10.0)
         print(f"\n[SUCCESS] ACK received within timeout")
