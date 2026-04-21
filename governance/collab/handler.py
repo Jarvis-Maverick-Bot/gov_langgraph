@@ -736,7 +736,7 @@ async def _handle_exit(handler: 'CollabHandler', envelope: CollabEnvelope) -> st
     )
 
     # Rule 4: Send processed ACK (not business message)
-    await _send_ack(handler, envelope, 'processed', result='')
+    await handler._send_ack(envelope, 'processed', result='')
 
     # Rule 5: Telegram notify (mandatory)
     try:
