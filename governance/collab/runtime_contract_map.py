@@ -102,9 +102,9 @@ class StepContract:
     description: str
     executor: str                   # 'nova' | 'jarvis'
     current_owner: str              # who owns the workflow at this step
-    mandatory_output: Optional[str] = None  # None = terminal step (complete/exit)
     allowed_results: List[str]      # e.g. ['approved', 'revision_required', 'blocked']
     completion_condition: str        # what counts as step done (NOT ACK)
+    mandatory_output: Optional[str] = None  # None = terminal step (complete/exit)
     notify_policy: List[NotifyPolicy] = field(default_factory=list)
     auto_continue: bool = True      # handler should submit next step automatically
     next_step: Optional[str] = None  # explicit next message_type in normal flow
