@@ -22,6 +22,5 @@
     "evidence_full_text_max_chars": 8000,
     "timeout_seconds": 60,
     "max_retries": 2
-  },
-  "telegram_bot_token": "8599695108:AAEFpu_ij3eSR4obBKfgfkrQejhnl2hkabQ"
+  }
 }
