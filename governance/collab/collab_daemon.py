@@ -412,41 +412,10 @@ class CollabDaemon:
             action = c.pending_action
 
             if action == 'awaiting_foundation_draft':
-                # Model A (auto-continuation): Nova delivers draft by writing to artifact_path.
-                # When artifact exists, auto-trigger review_request — no additional Nova message needed.
-                artifact_path = getattr(c, 'artifact_path', None) or ''
-                if artifact_path:
-                    from pathlib import Path
-                    p = Path(artifact_path)
-                    if p.exists():
-                        self._log("WORKER", f"[AUTO-TRIGGER] collab_id={c.collab_id} artifact found → sending review_request")
-                        # Construct and dispatch review_request envelope
-                        from governance.collab.envelope import CollabEnvelope
-                        import uuid
-                        review_envelope = CollabEnvelope(
-                            message_id=f"msg-{uuid.uuid4().hex[:12]}",
-                            collab_id=c.collab_id,
-                            message_type="review_request",
-                            from_="jarvis",
-                            to="nova",
-                            artifact_type=getattr(c, 'artifact_type', None) or 'foundation',
-                            artifact_path=artifact_path,
-                            payload={
-                                "review_scope": "foundation completeness and governance alignment",
-                                "workflow": getattr(c, 'workflow', None) or 'v2_0',
-                                "stage": "foundation_create_review"
-                            },
-                            summary=f"Auto-triggered review_request for {c.collab_id}"
-                        )
-                        # Log OUT so the message history reflects the continuation
-                        self.store.log_message(review_envelope.as_dict(), 'OUT')
-                        # Dispatch via handler (same process, event-driven path)
-                        await self.handler.handle_inbound(review_envelope)
-                        self._log("WORKER", f"[AUTO-TRIGGER] collab_id={c.collab_id} review_request dispatched")
-                    else:
-                        self._log("WORKER", f"[WAIT] collab_id={c.collab_id} awaiting_foundation_draft — artifact not found at {artifact_path}")
-                else:
-                    self._log("WORKER", f"[WAIT] collab_id={c.collab_id} awaiting_foundation_draft — no artifact_path set yet")
+                # Nova owns foundation drafting. Auto-continuation lives in
+                # Nova's own handler (checks artifact_path, publishes review_request).
+                # Worker sweep has no role here — do not fabricate downstream messages.
+                self._log("WORKER", f"[SKIP] collab_id={c.collab_id} pending_action={action} — Nova owns drafting continuum")
 
             elif action == 'awaiting_review_execution':
                 # Handler owns this — do not process in worker sweep
