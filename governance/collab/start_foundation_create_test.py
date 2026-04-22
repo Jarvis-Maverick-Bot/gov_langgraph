@@ -147,15 +147,20 @@ async def main():
 
     # Step 3: wait for review_request from Nova (after drafting completes)
     print("Step 3: Waiting for review_request from Nova...")
+    review_received = False
     try:
         await asyncio.wait_for(review_request_event.wait(), timeout=30.0)
         print(f"[OK] review_request received\n")
+        review_received = True
     except asyncio.TimeoutError:
         print(f"[FAIL] No review_request within 30s after workflow_started\n")
         print(f"[INFO] collab_id={collab_id}")
 
     print(f"[TC1] collab_id={collab_id}")
-    print("[TC1] review_request observed — TC1 workflow progression confirmed")
+    if review_received:
+        print("[TC1] review_request observed — TC1 workflow progression confirmed")
+    else:
+        print("[TC1] review_request NOT observed — TC1 incomplete")
 
     await nc.close()
 
