@@ -1134,6 +1134,33 @@ async def _send_envelope(handler: 'CollabHandler', envelope: CollabEnvelope,
     key = f"{envelope.collab_id}:{envelope.message_id}"
     loop = asyncio.get_event_loop()
 
+    # Sender-side state creation: kickoff messages require local collab state
+    # so the sender can later handle continuation messages (e.g. workflow_started)
+    if envelope.message_type == 'start_foundation_create':
+        existing = handler.store.get_collab(envelope.collab_id)
+        if not existing:
+            handler.store.open_collab(
+                collab_id=envelope.collab_id,
+                opened_by=envelope.from_,
+                artifact_type=getattr(envelope, 'artifact_type', None) or None,
+                artifact_path=getattr(envelope, 'artifact_path', None) or None,
+                receiver=envelope.to
+            )
+            handler.store.update_collab(
+                collab_id=envelope.collab_id,
+                status='in_progress',
+                current_owner=envelope.from_,
+                last_event='foundation_create_started',
+                pending_action='awaiting_workflow_started'
+            )
+            handler.store.emit_event(
+                collab_id=envelope.collab_id,
+                event='foundation_create_started',
+                message_id=envelope.message_id,
+                from_=envelope.from_
+            )
+            handler._log("HANDLER", f"[{envelope.collab_id}] sender-side collab state created for {envelope.message_type}")
+
     for attempt in range(3):
         future = loop.create_future()
         handler._pending_ack[key] = future
