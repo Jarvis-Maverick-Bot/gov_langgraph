@@ -432,22 +432,20 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
     """
     Handle 'start_foundation_create' — Nova initiates Foundation delivery.
 
-    Model A (auto-continuation on owner side):
-    After recording state, Nova's own handler checks if artifact already exists.
-    If yes, immediately sends review_request to Jarvis — no manual re-trigger needed.
+    State = open, owner = nova, pending_action = awaiting_foundation_draft.
+    Actual continuation (artifact monitoring → review_request) lives in
+    the owner-side worker sweep. Not in this handler.
     """
     if _is_exited(envelope.collab_id, handler.store):
         await _send_ack(handler, envelope, 'received', result='rejected_collab_exited')
         return "rejected_exited"
-
-    artifact_path = getattr(envelope, 'artifact_path', None) or ''
 
     handler.store.update_collab(
         collab_id=envelope.collab_id,
         status='open',
         current_owner='nova',
         artifact_type='foundation',
-        artifact_path=artifact_path,
+        artifact_path=getattr(envelope, 'artifact_path', None) or '',
         pending_action='awaiting_foundation_draft',
         last_event='foundation_create_started'
     )
@@ -458,36 +456,6 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
         artifact_type='foundation',
         from_=envelope.from_
     )
-
-    # ── Model A auto-continuation (Nova side) ──────────────────────────
-    # If artifact already exists at the declared path, Nova's handler
-    # immediately triggers the next step: review_request → Jarvis.
-    # This is a real NATS publish, not a local handle_inbound call.
-    if artifact_path:
-        from pathlib import Path
-        if Path(artifact_path).exists():
-            import uuid as _uuid
-            handler._log("HANDLER", f"[{envelope.collab_id}] artifact found at {artifact_path} — auto-triggering review_request")
-            review_envelope = CollabEnvelope(
-                message_id=f"msg-{_uuid.uuid4().hex[:12]}",
-                collab_id=envelope.collab_id,
-                message_type="review_request",
-                from_="nova",      # Correct direction: Nova initiates review handover
-                to="jarvis",
-                artifact_type='foundation',
-                artifact_path=artifact_path,
-                payload={
-                    "review_scope": "foundation completeness and governance alignment",
-                    "workflow": "v2_0",
-                    "stage": "foundation_create_review"
-                },
-                summary=f"Auto-triggered review_request for {envelope.collab_id}"
-            )
-            # Log OUT so message history reflects real bus publish
-            handler.store.log_message(review_envelope.as_dict(), 'OUT')
-            # Publish on real NATS bus — this goes to jarvis
-            await handler.nc.publish('gov.collab.command', review_envelope.to_json())
-            handler._log("HANDLER", f"[{envelope.collab_id}] review_request published to gov.collab.command (nova→jarvis)")
 
     return 'foundation_create_started'
 
