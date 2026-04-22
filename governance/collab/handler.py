@@ -936,6 +936,13 @@ class CollabHandler:
                 self._log("WARN", f"Invalid envelope: {envelope.message_id}")
                 return False
 
+            # ── to 路由校验 ──────────────────────────────────────────────────────
+            # 消息的 to 字段必须指向当前 daemon 的身份，否则拒绝处理
+            # 这样可以防止双边 daemon 乱吃同一条消息
+            if envelope.to and envelope.to != self.my_id:
+                self._log("HANDLER", f"[REJECT] to={envelope.to} != my_id={self.my_id} — not for this daemon")
+                return False
+
             self.store.log_message(envelope.as_dict(), direction='IN')
             await self._send_ack(envelope, 'received')
 
