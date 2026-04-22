@@ -442,6 +442,7 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
       → no auto-trigger (drafting belongs to Nova)
     """
     from .foundation_executor import execute_foundation_delivery
+    from .review_executor import _to_sharefolder_path
 
     if _is_exited(envelope.collab_id, handler.store):
         await _send_ack(handler, envelope, 'received', result='rejected_collab_exited')
@@ -479,6 +480,9 @@ async def _handle_start_foundation_create(handler: 'CollabHandler', envelope: Co
         # Get artifact_path from state (set by executor)
         state = handler.store.get_collab(envelope.collab_id)
         artifact_path = getattr(state, 'artifact_path', '') if state else ''
+
+        # Convert local macOS path to sharefolder UNC path for Jarvis access
+        artifact_path = _to_sharefolder_path(artifact_path)
 
         # Send review_request to Jarvis
         import uuid
