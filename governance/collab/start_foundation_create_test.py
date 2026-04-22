@@ -5,28 +5,23 @@ Command: "Start V2.0 Foundation Create"
 Command intent: start_foundation_delivery
 Workflow: v2_0 / stage: foundation_create
 
-TC1 flow (runtime-driven):
+TC1 flow (updated — Nova-triggered via workflow_started):
 1. Nova sends start_foundation_create to Jarvis (this test sends)
 2. Jarvis daemon validates, creates collab, updates state
 3. Jarvis returns ACK to Nova
-4. Nova daemon's handle_ack() receives ACK
-5. Nova's handle_ack() TC1 continuation fires:
-   - execute_foundation_delivery() produces artifact
-   - review_request sent to Jarvis
-6. Jarvis daemon receives review_request, executes review, returns review_response
-7. Nova receives review_response
+4. Jarvis sends workflow_started to Nova
+5. Nova receives workflow_started → triggers drafting continuation
+   - execute_foundation_delivery (produce draft artifact)
+   - send review_request to Jarvis
+6. Jarvis receives review_request, executes review, returns review_response
 
 This test script:
 - Only sends start_foundation_create
 - Observes ACKs received
+- Observes workflow_started from Jarvis
 - Does NOT manually open collab
 - Does NOT manually run continuation
 - Does NOT impersonate runtime
-
-Expected:
-- After step 3: JARVIS state = open, pending_action=awaiting_foundation_draft
-- After step 5: NOVA has sent review_request (observable in message log)
-- After step 6: JARVIS review_response observable
 """
 
 import asyncio
@@ -61,27 +56,39 @@ async def main():
     nc = await connect(nats_url)
     print("Connected.")
 
-    acks_received = []
     ack_event = asyncio.Event()
+    wf_started_event = asyncio.Event()
 
     async def handle_ack(msg):
         data = json.loads(msg.data.decode('utf-8'))
         print(f"\n[ACK RECEIVED] message_id={data.get('message_id')} "
               f"ack_for={data.get('ack_for')} status={data.get('status')} "
               f"result={data.get('result')} to={data.get('to')} from={data.get('from')}")
-        acks_received.append(data)
         ack_event.set()
+
+    async def handle_command(msg):
+        data = json.loads(msg.data.decode('utf-8'))
+        msg_type = data.get('message_type', '')
+        print(f"\n[CMD RECEIVED] message_type={msg_type} "
+              f"from={data.get('from')} to={data.get('to')} collab_id={data.get('collab_id')}")
+        if msg_type == 'workflow_started':
+            print(f"[workflow_started] payload={data.get('payload', {})}")
+            wf_started_event.set()
+        elif msg_type == 'review_request':
+            print(f"[review_request] artifact_path={data.get('artifact_path')} "
+                  f"review_scope={data.get('payload', {}).get('review_scope')}")
+        elif msg_type == 'review_response':
+            print(f"[review_response] result={data.get('payload', {}).get('result')}")
 
     print(f"Subscribing to {subjects['ack']}...")
     await nc.subscribe(subjects['ack'], cb=handle_ack)
+    await nc.subscribe(subjects['command'], cb=handle_command)
     await nc.flush()
     print("Subscription active. Now publishing start_foundation_create.\n")
 
     collab_id = f"foundation-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     message_id = f"msg-{uuid.uuid4().hex[:12]}"
 
-    # TC1: Nova sends start_foundation_create to Jarvis
-    # No manual collab creation — let Jarvis daemon create state via handle_inbound
     envelope = {
         "message_id": message_id,
         "collab_id": collab_id,
@@ -105,22 +112,34 @@ async def main():
           f"command_intent=start_foundation_delivery from={sender_id} to={target_id}")
     await nc.publish(subjects['command'], json.dumps(envelope).encode('utf-8'))
     await nc.flush()
-    print("Published. Waiting for ACK...\n")
+    print("Published.\n")
 
+    # Step 1: wait for ACK from Jarvis
+    print("Step 1: Waiting for ACK from Jarvis...")
     try:
         await asyncio.wait_for(ack_event.wait(), timeout=10.0)
-        print(f"\n[SUCCESS] ACK received within timeout")
-        print(f"[SUCCESS] Total ACKs received: {len(acks_received)}")
-        for a in acks_received:
-            print(f"  -> ack_id={a.get('message_id')} status={a.get('status')} "
-                  f"result={a.get('result')} to={a.get('to')} from={a.get('from')}")
-        print(f"\n[TC1] Kickoff delivered. Waiting for TC1 continuation...")
-        print(f"[TC1] Nova's handle_ack() should now trigger foundation delivery + review_request")
-        print(f"[TC1] Monitor collab_state.json and message log for evidence.")
-        print(f"[TC1] collab_id for this run: {collab_id}")
+        print(f"[OK] ACK received\n")
     except asyncio.TimeoutError:
-        print(f"\n[FAIL] No ACK received within 10 seconds")
-        print(f"[FAIL] ACKs received before timeout: {len(acks_received)}")
+        print(f"[FAIL] No ACK within 10s\n")
+        await nc.close()
+        return
+
+    # Step 2: wait for workflow_started from Jarvis
+    print("Step 2: Waiting for workflow_started from Jarvis...")
+    try:
+        await asyncio.wait_for(wf_started_event.wait(), timeout=10.0)
+        print(f"[OK] workflow_started received\n")
+    except asyncio.TimeoutError:
+        print(f"[FAIL] No workflow_started within 10s (Nova's continuation not triggered)\n")
+        print(f"[INFO] collab_id={collab_id}")
+        await nc.close()
+        return
+
+    # Step 3+: wait for review_request and review_response
+    print("Step 3: Nova's _handle_workflow_started is now executing...")
+    print(f"[TC1] collab_id={collab_id}")
+    print("[TC1] Monitor collab_state.json for Nova's state updates")
+    print("[TC1] review_request should arrive from Nova after drafting completes")
 
     await nc.close()
 

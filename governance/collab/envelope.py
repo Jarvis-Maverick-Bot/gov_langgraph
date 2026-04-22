@@ -129,7 +129,8 @@ VALID_MESSAGE_TYPES = {
     'open',
     'ping',
     'pong',
-    'start_foundation_create'
+    'start_foundation_create',
+    'workflow_started'
 }
 
 # Valid ACK statuses
