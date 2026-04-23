@@ -18,24 +18,74 @@ Files read from:
 
 import re
 import os
+import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 
-# ── Shared drive paths ─────────────────────────────────────────────────────────
+# ── Path configuration helpers ──────────────────────────────────────────────────
 
-_SHARED_ROOT = Path(r"\\192.168.31.124\Nova-Jarvis-Shared\working\01-projects\Nexus\V2.0")
-_RELEASE_DEFINITION = _SHARED_ROOT / "01-release-definition"
+def _load_config() -> dict:
+    config_path = Path(__file__).parent / "collab_config.json"
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def _get_effective_roots() -> Tuple[Path, Path]:
+    """
+    Returns (effective_local_root, effective_transport_root).
+    Rule: effective_local = local_shared_root ?? transport_shared_root
+          effective_transport = transport_shared_root ?? local_shared_root
+    Raises ValueError if both are None.
+    """
+    config = _load_config()
+    paths_cfg = config.get("paths", {})
+    local_root = paths_cfg.get("local_shared_root")
+    transport_root = paths_cfg.get("transport_shared_root")
+    if local_root is None and transport_root is None:
+        raise ValueError(
+            "collab_config.json paths.local_shared_root and paths.transport_shared_root "
+            "are both null — at least one must be set"
+        )
+    effective_local = Path(local_root) if local_root else Path(transport_root)
+    effective_transport = Path(transport_root) if transport_root else Path(local_root)
+    return effective_local, effective_transport
+
+
+def _doctrine_base_path() -> Path:
+    """Return the V2.0 project root for doctrine loading (effective_local + project_rel_root)."""
+    effective_local, _ = _get_effective_roots()
+    config = _load_config()
+    rel_root = config.get("paths", {}).get("project_rel_root", "")
+    if rel_root:
+        return effective_local / rel_root
+    return effective_local
 
 
 # ── Doctrine name → file path mapping ────────────────────────────────────────
 
-DOCTRINE_PATHS: Dict[str, Path] = {
-    "v2_0_foundation_baseline": _RELEASE_DEFINITION / "V2_0_FOUNDATION_V0_2.md",
-    "v2_0_scope":               _RELEASE_DEFINITION / "V2_0_SCOPE_V0_2.md",
-    "v2_0_prd":                 _RELEASE_DEFINITION / "V2_0_PRD_V0_2.md",
-}
+_DOCTRINE_BASE = None  # lazy-initialized
+
+
+def _get_doctrine_base() -> Path:
+    global _DOCTRINE_BASE
+    if _DOCTRINE_BASE is None:
+        _DOCTRINE_BASE = _doctrine_base_path()
+    return _DOCTRINE_BASE
+
+
+def DOCTRINE_PATHS() -> Dict[str, Path]:
+    """Returns doctrine name → full path dict, built from current config."""
+    base = _get_doctrine_base()
+    release_def = base / "01-release-definition"
+    return {
+        "v2_0_foundation_baseline": release_def / "V2_0_FOUNDATION_V0_2.md",
+        "v2_0_scope":               release_def / "V2_0_SCOPE_V0_2.md",
+        "v2_0_prd":                 release_def / "V2_0_PRD_V0_2.md",
+    }
 
 
 # ── Layer 1: Doctrine Snapshot (contract metadata source) ─────────────────────
@@ -72,7 +122,7 @@ def load_doctrine_snapshot(doctrine_loading_set: List[str]) -> LoadedDoctrine:
     doctrine_snapshot = {}
 
     for name in doctrine_loading_set:
-        path = DOCTRINE_PATHS.get(name)
+        path = DOCTRINE_PATHS().get(name)
         if not path:
             errors.append(f"no path mapping for doctrine: {name}")
             doctrine_snapshot[name] = DoctrineSnapshot(

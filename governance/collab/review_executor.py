@@ -20,26 +20,90 @@ from governance.collab.runtime_contract_map import DomainResult
 from governance.collab.llm_adapter import create_llm_adapter, LLMOutput
 
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# ── Path configuration helpers ──────────────────────────────────────────────────
 
-_SHARED_ROOT = Path(r"\\192.168.31.124\Nova-Jarvis-Shared\working\01-projects\Nexus\V2.0")
-_MACOS_SHAREFOLDER_BASE = "/Users/alex/Nova-Jarvis-Shared"
-_SHAREFOLDER_BASE = r"\\192.168.31.124\Nova-Jarvis-Shared"
+def _load_config() -> dict:
+    """Load collab_config.json."""
+    config_path = Path(__file__).parent / "collab_config.json"
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
-_FOUNDATION_BASELINE = _SHARED_ROOT / "01-release-definition" / "V2_0_FOUNDATION_V0_2.md"
-_SCOPE_DOC = _SHARED_ROOT / "01-release-definition" / "V2_0_SCOPE_V0_2.md"
-_PRD_DOC = _SHARED_ROOT / "01-release-definition" / "V2_0_PRD_V0_2.md"
+
+def _get_effective_roots():
+    """
+    Returns (effective_local_root, effective_transport_root).
+    Rule: effective_local = local_shared_root ?? transport_shared_root
+          effective_transport = transport_shared_root ?? local_shared_root
+    Raises ValueError if both are None.
+    """
+    config = _load_config()
+    paths_cfg = config.get("paths", {})
+    local_root = paths_cfg.get("local_shared_root")
+    transport_root = paths_cfg.get("transport_shared_root")
+    if local_root is None and transport_root is None:
+        raise ValueError(
+            "collab_config.json paths.local_shared_root and paths.transport_shared_root "
+            "are both null — at least one must be set"
+        )
+    effective_local = Path(local_root) if local_root else Path(transport_root)
+    effective_transport = Path(transport_root) if transport_root else Path(local_root)
+    return effective_local, effective_transport
+
+
+def _v2_project_root():
+    """Return V2.0 project root = effective_local + project_rel_root."""
+    effective_local, _ = _get_effective_roots()
+    config = _load_config()
+    rel_root = config.get("paths", {}).get("project_rel_root", "")
+    if rel_root:
+        return effective_local / rel_root
+    return effective_local
+
+
+# ── Derived path constants (lazy) ──────────────────────────────────────────────────
+
+_SHARED_ROOT = None
+_MACOS_SHAREFOLDER_BASE = None
+_SHAREFOLDER_BASE = None
+_FOUNDATION_BASELINE = None
+_SCOPE_DOC = None
+_PRD_DOC = None
+
+
+def _init_paths():
+    global _SHARED_ROOT, _MACOS_SHAREFOLDER_BASE, _SHAREFOLDER_BASE
+    global _FOUNDATION_BASELINE, _SCOPE_DOC, _PRD_DOC
+    if _SHARED_ROOT is not None:
+        return
+    project_root = _v2_project_root()
+    _, effective_transport = _get_effective_roots()
+    _SHARED_ROOT = project_root
+    _FOUNDATION_BASELINE = project_root / "01-release-definition" / "V2_0_FOUNDATION_V0_2.md"
+    _SCOPE_DOC = project_root / "01-release-definition" / "V2_0_SCOPE_V0_2.md"
+    _PRD_DOC = project_root / "01-release-definition" / "V2_0_PRD_V0_2.md"
+    # Transport root for path conversion (对方可访问的路径格式)
+    _SHAREFOLDER_BASE = str(effective_transport).replace('/', '\\')
+    # Local macOS path prefix (对方机器的本地路径)
+    config = _load_config()
+    local_root = config.get("paths", {}).get("local_shared_root")
+    _MACOS_SHAREFOLDER_BASE = local_root if local_root else ""
 
 
 # ── Cross-platform path ────────────────────────────────────────────────────────
 
 def _to_sharefolder_path(artifact_path: str) -> str:
-    """Convert macOS local path to Windows/Unix sharefolder path."""
+    """Convert artifact_path to a transport-accessible path for the remote side.
+    Uses effective_transport_root as the target base.
+    """
     if not artifact_path:
         return artifact_path
-    if artifact_path.startswith(_SHAREFOLDER_BASE.replace('\\\\', '\\')):
+    _init_paths()
+    sharefolder_escaped = _SHAREFOLDER_BASE.replace('\\', '\\\\')
+    if artifact_path.startswith(sharefolder_escaped):
         return artifact_path
-    if artifact_path.startswith(_MACOS_SHAREFOLDER_BASE):
+    if _MACOS_SHAREFOLDER_BASE and artifact_path.startswith(_MACOS_SHAREFOLDER_BASE):
         return artifact_path.replace(_MACOS_SHAREFOLDER_BASE, _SHAREFOLDER_BASE.replace('\\', '\\\\'))
     return artifact_path
 
@@ -157,6 +221,7 @@ EVIDENCE_FULL_TEXT_MAX_CHARS = 8000  # default; overridden by config
 
 def _load_doctrine_files(doctrine_loading_set: list) -> Dict[str, str]:
     """Load doctrine files. Returns {name: content}. Missing files logged as warnings."""
+    _init_paths()
     loaded = {}
     path_map = {
         "v2_0_foundation_baseline": _FOUNDATION_BASELINE,
@@ -295,6 +360,7 @@ def _load_nova_draft(artifact_path: str) -> Tuple[bool, str, Optional[str]]:
     """Load Nova's Foundation draft. Returns (loaded, content, error)."""
     if not artifact_path:
         return False, "", "artifact_path is empty"
+    _init_paths()
     sharefolder_path = _to_sharefolder_path(artifact_path)
     path = Path(sharefolder_path)
     if not path.exists():

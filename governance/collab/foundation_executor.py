@@ -26,11 +26,19 @@ def _load_local_config() -> dict:
 
 
 def _shared_root_from_config(config: dict) -> Path:
-    drafting = config.get("drafting", {})
-    root = drafting.get("local_shared_root")
-    if root:
-        return Path(root) / "working" / "01-projects" / "Nexus" / "V2.0"
-    return Path(r"\\192.168.31.124\Nova-Jarvis-Shared\working\01-projects\Nexus\V2.0")
+    paths_cfg = config.get("paths", {})
+    local_root = paths_cfg.get("local_shared_root")
+    transport_root = paths_cfg.get("transport_shared_root")
+    if local_root is None and transport_root is None:
+        raise ValueError(
+            "collab_config.json paths.local_shared_root and paths.transport_shared_root "
+            "are both null — at least one must be set"
+        )
+    effective = Path(local_root) if local_root else Path(transport_root)
+    rel_root = paths_cfg.get("project_rel_root", "")
+    if rel_root:
+        return effective / rel_root
+    return effective
 
 
 def _build_path_map(config: dict) -> dict:
