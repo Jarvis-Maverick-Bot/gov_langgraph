@@ -124,11 +124,7 @@ class MiniMaxAdapter:
                 )
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                     result_data = json.loads(resp.read().decode("utf-8"))
-                    content = result_data.get("content", [])
-                    if isinstance(content, list) and len(content) > 0:
-                        raw = content[0].get("text", "")
-                    else:
-                        raw = str(content)
+                    raw = self._extract_text_from_content(result_data.get("content", []))
                     return self._parse_output(raw, fallback_raw=raw)
 
             except Exception as e:
@@ -258,11 +254,7 @@ class MiniMaxAdapter:
                 )
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                     result_data = json.loads(resp.read().decode("utf-8"))
-                    content = result_data.get("content", [])
-                    if isinstance(content, list) and len(content) > 0:
-                        text = content[0].get("text", "")
-                    else:
-                        text = str(content)
+                    text = self._extract_text_from_content(result_data.get("content", []))
                     if not text.strip():
                         return False, "", "llm_empty_output"
                     return True, text, None
@@ -273,6 +265,22 @@ class MiniMaxAdapter:
                     time.sleep(1 * (attempt + 1))
 
         return False, "", f"llm_generation_failed: {last_error}"
+
+    @staticmethod
+    def _extract_text_from_content(content: list) -> str:
+        if not isinstance(content, list):
+            return str(content)
+        for block in content:
+            if block.get('type') == 'text':
+                t = block.get('text', '')
+                if t.strip():
+                    return t
+        if content:
+            first = content[0]
+            if isinstance(first, dict):
+                return first.get('text', str(content))
+            return str(first)
+        return ''
 
 
 # ── OpenAI Provider ───────────────────────────────────────────────────────────
