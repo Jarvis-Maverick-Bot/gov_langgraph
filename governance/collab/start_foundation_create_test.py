@@ -60,10 +60,9 @@ async def main():
 
     store = CollabStateStore()
     handler = CollabHandler(
-        nc=nc,
-        my_id=sender_id,
-        store=store,
-        config=config
+        nc,
+        store,
+        sender_id
     )
     print(f"Handler ready: my_id={handler.my_id}")
 
